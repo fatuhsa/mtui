@@ -15,10 +15,9 @@ pub trait AudioBackend: Send + 'static {
     fn get_position(&mut self) -> Result<Option<f64>, String>;
     fn get_duration(&mut self) -> Result<Option<f64>, String>;
     fn is_idle(&mut self) -> Result<bool, String>;
-    fn stop_playback(&mut self) -> Result<(), String> {
-        self.stop()
-    }
+    /// Stop active audio playback (resets playback position and transitions to stopped/idle state)
     fn stop(&mut self) -> Result<(), String>;
+    /// Shut down backend player process and clean up resources
     fn shutdown(&mut self) -> Result<(), String> {
         Ok(())
     }
@@ -201,10 +200,9 @@ impl MpvBackend {
         if val.is_null() {
             Ok(None)
         } else {
-            match serde_json::from_value::<T>(val) {
-                Ok(parsed) => Ok(Some(parsed)),
-                Err(_) => Ok(None),
-            }
+            serde_json::from_value::<T>(val)
+                .map(Some)
+                .map_err(|e| format!("Failed to deserialize property '{}': {}", property, e))
         }
     }
 }
@@ -383,5 +381,72 @@ impl AudioBackend for MockBackend {
         self.is_idle_state = true;
         self.position = 0.0;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_property_deserialization_error_not_swallowed() {
+        let (mut server, client) = UnixStream::pair().unwrap();
+        server.set_read_timeout(Some(Duration::from_millis(500))).ok();
+        server.set_write_timeout(Some(Duration::from_millis(500))).ok();
+        client.set_read_timeout(Some(Duration::from_millis(500))).ok();
+        client.set_write_timeout(Some(Duration::from_millis(500))).ok();
+
+        let reader = BufReader::new(client.try_clone().unwrap());
+        let mut backend = MpvBackend {
+            child: None,
+            socket_path: PathBuf::from("/tmp/mtui_test_dummy.sock"),
+            stream: Some(client),
+            reader: Some(reader),
+            request_counter: AtomicU64::new(1),
+        };
+
+        let handle = std::thread::spawn(move || {
+            let mut server_reader = BufReader::new(server.try_clone().unwrap());
+            let mut line = String::new();
+
+            // Request 1: Valid f64
+            server_reader.read_line(&mut line).unwrap();
+            let req: serde_json::Value = serde_json::from_str(&line).unwrap();
+            let req_id = req["request_id"].as_u64().unwrap();
+            let resp = serde_json::json!({ "request_id": req_id, "error": "success", "data": 42.5 });
+            writeln!(server, "{}", resp).unwrap();
+
+            // Request 2: Property unavailable
+            line.clear();
+            server_reader.read_line(&mut line).unwrap();
+            let req: serde_json::Value = serde_json::from_str(&line).unwrap();
+            let req_id = req["request_id"].as_u64().unwrap();
+            let resp = serde_json::json!({ "request_id": req_id, "error": "property unavailable" });
+            writeln!(server, "{}", resp).unwrap();
+
+            // Request 3: Malformed / wrong type (string when f64 is expected)
+            line.clear();
+            server_reader.read_line(&mut line).unwrap();
+            let req: serde_json::Value = serde_json::from_str(&line).unwrap();
+            let req_id = req["request_id"].as_u64().unwrap();
+            let resp = serde_json::json!({ "request_id": req_id, "error": "success", "data": "invalid_number_string" });
+            writeln!(server, "{}", resp).unwrap();
+        });
+
+        // 1. Valid f64
+        let res1 = backend.get_property::<f64>("time-pos");
+        assert_eq!(res1, Ok(Some(42.5)));
+
+        // 2. Property unavailable -> Ok(None)
+        let res2 = backend.get_property::<f64>("time-pos");
+        assert_eq!(res2, Ok(None));
+
+        // 3. Deserialization error -> MUST be Err, NOT Ok(None)
+        let res3 = backend.get_property::<f64>("time-pos");
+        assert!(res3.is_err(), "Deserialization error must NOT be swallowed as Ok(None)");
+        let err = res3.unwrap_err();
+        assert!(err.contains("Failed to deserialize property 'time-pos'"), "Actual error: {}", err);
+
+        handle.join().unwrap();
     }
 }

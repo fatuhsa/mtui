@@ -6,12 +6,9 @@ on:
       - 'v*'
 
 jobs:
-  build-and-release:
-    name: Build & Release Artifacts
+  build:
+    name: Build Artifacts (${{ matrix.target }})
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
     strategy:
       matrix:
         include:
@@ -30,7 +27,9 @@ jobs:
           targets: ${{ matrix.target }}
 
       - name: Install Cross
-        run: cargo install cross --git https://github.com/cross-rs/cross
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cross
 
       - name: Build release binary
         run: cross build --release --target ${{ matrix.target }}
@@ -43,12 +42,37 @@ jobs:
           tar -czvf ${{ matrix.asset_name }} -C package mtui
           sha256sum ${{ matrix.asset_name }} > ${{ matrix.asset_name }}.sha256
 
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-${{ matrix.target }}
+          path: |
+            ${{ matrix.asset_name }}
+            ${{ matrix.asset_name }}.sha256
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: artifacts-*
+          path: release-assets
+          merge-multiple: true
+
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            ${{ matrix.asset_name }}
-            ${{ matrix.asset_name }}.sha256
+            release-assets/*.tar.gz
+            release-assets/*.sha256
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

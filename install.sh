@@ -87,7 +87,7 @@ if [ "$INSTALLED" -eq 0 ]; then
         pkg install -y rust git
     fi
     cargo install --git "https://github.com/${REPO}.git" --bin mtui --force
-    if [ -f "$HOME/.cargo/bin" ] && [ -f "$HOME/.cargo/bin/mtui" ] && [ "$BIN_DIR" != "$HOME/.cargo/bin" ]; then
+    if [ -d "$HOME/.cargo/bin" ] && [ -f "$HOME/.cargo/bin/mtui" ] && [ "$BIN_DIR" != "$HOME/.cargo/bin" ]; then
         cp "$HOME/.cargo/bin/mtui" "$BIN_DIR/mtui"
     fi
 fi
