@@ -4,26 +4,27 @@ A lightweight, high-performance, battery-friendly TUI Music Player built with Ru
 
 ---
 
-## 📋 Prerequisites
+## 📸 Showcase
 
-Before installing `mtui`, ensure you have the required tools installed on Termux / Linux:
+<div align="center">
 
-| Tool | Purpose | Install Command (Termux) |
-|---|---|---|
-| **Rust / Cargo** | Binary compilation | `pkg install rust` |
-| **mpv** | Audio playback engine | `pkg install mpv` |
-| **ffmpeg** | Embedded album art extraction | `pkg install ffmpeg` |
-| **chafa** | Sixel / iTerm2 / Block image rendering | `pkg install chafa` |
-| **git** | Repository cloning | `pkg install git` |
-| **Nerd Font** | Terminal icons (, , , , etc.) | Set any Nerd Font in Termux |
+|  Now Playing |  File Browser |
+|:---:|:---:|
+| <img src="assets/screenshots/showcase-1.jpg" width="360" alt="mtui Now Playing view" /> | <img src="assets/screenshots/showcase-2.jpg" width="360" alt="mtui File Browser view" /> |
+
+|  Queue List |  Cover Art |  Help & Controls |
+|:---:|:---:|:---:|
+| <img src="assets/screenshots/showcase-3.jpg" width="240" alt="mtui Queue List" /> | <img src="assets/screenshots/showcase-4.jpg" width="240" alt="mtui Cover Art" /> | <img src="assets/screenshots/showcase-5.jpg" width="240" alt="mtui Controls Guide" /> |
+
+</div>
 
 ---
 
-## ⚡ Installation
+## ⚡ Instant Installation (No Compilation Needed!)
 
 ### 🚀 One-Liner Installer (Recommended)
 
-Run this single command in Termux to automatically install all dependencies, build `mtui`, and place it in your `$PATH`:
+Run this single command in Termux to automatically install runtime dependencies (`mpv`, `ffmpeg`, `chafa`), download the **prebuilt binary (aarch64)** from GitHub Releases, and install `mtui` directly into your `$PATH` in **under 3 seconds** without compiling Rust:
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/fatuhsa/mtui/main/install.sh | bash
@@ -31,9 +32,23 @@ curl -sSL https://raw.githubusercontent.com/fatuhsa/mtui/main/install.sh | bash
 
 ---
 
+### 📋 Prerequisites (For Building from Source)
+
+If you compile from source instead of using the prebuilt binary, ensure you have:
+
+| Tool | Purpose | Install Command (Termux) |
+|---|---|---|
+| **mpv** | Audio playback engine | `pkg install mpv` |
+| **ffmpeg** | Embedded album art extraction | `pkg install ffmpeg` |
+| **chafa** | Sixel / iTerm2 / Block image rendering | `pkg install chafa` |
+| **Rust / Cargo** | Binary compilation | `pkg install rust` |
+| **Nerd Font** | Terminal icons (, , , etc.) | Any Nerd Font in Termux |
+
+---
+
 ### 📦 Manual Installation via Cargo
 
-If you already have `rust`, `mpv`, `ffmpeg`, and `chafa` installed:
+If you prefer building locally:
 
 ```bash
 pkg install -y rust mpv ffmpeg chafa git
