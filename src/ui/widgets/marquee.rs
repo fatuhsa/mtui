@@ -7,23 +7,11 @@ use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 pub struct Marquee;
 
 impl Marquee {
-    pub fn render(
-        text: &str,
-        area: Rect,
-        step: usize,
-        buf: &mut Buffer,
-        style: Style,
-    ) {
+    pub fn render(text: &str, area: Rect, step: usize, buf: &mut Buffer, style: Style) {
         Self::render_aligned(text, area, step, buf, style, false);
     }
 
-    pub fn render_centered(
-        text: &str,
-        area: Rect,
-        step: usize,
-        buf: &mut Buffer,
-        style: Style,
-    ) {
+    pub fn render_centered(text: &str, area: Rect, step: usize, buf: &mut Buffer, style: Style) {
         Self::render_aligned(text, area, step, buf, style, true);
     }
 
@@ -74,4 +62,3 @@ impl Marquee {
         buf.set_string(area.x, area.y, display_chars, style);
     }
 }
-

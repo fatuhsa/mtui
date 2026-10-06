@@ -196,4 +196,4 @@ mtui/
 cargo test
 ```
 
-All 13 core engine lifecycle, error-handling, playlist, shuffle, Unicode CJK/emoji display truncation, visualizer physics, and touch hit-mapping tests pass out-of-the-box.
+All 28 core engine lifecycle, error-handling, playlist, shuffle, Unicode CJK/emoji display truncation, visualizer physics, and touch hit-mapping tests pass out-of-the-box.

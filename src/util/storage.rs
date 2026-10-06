@@ -1,6 +1,6 @@
+use crate::engine::track::Track;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
-use crate::engine::track::Track;
 
 /// Discovers common music directories on Android / Termux
 pub fn detect_default_music_dirs() -> Vec<PathBuf> {
@@ -53,13 +53,13 @@ pub fn scan_audio_files<P: AsRef<Path>>(dir: P) -> Vec<Track> {
     }
 
     // Sort tracks alphabetically by display name
-    tracks.sort_by(|a, b| a.display_name().to_lowercase().cmp(&b.display_name().to_lowercase()));
+    tracks.sort_by_key(|a| a.display_name().to_lowercase());
     tracks
 }
 
 /// Formats seconds into "MM:SS" or "HH:MM:SS"
 pub fn format_time(seconds: f64) -> String {
-    if seconds.is_nan() || seconds < 0.0 {
+    if !seconds.is_finite() || seconds < 0.0 {
         return "00:00".to_string();
     }
     let total_secs = seconds.round() as u64;

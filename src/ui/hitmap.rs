@@ -1,6 +1,6 @@
+use crate::engine::commands::EngineCommand;
 use ratatui::layout::Rect;
 use std::path::PathBuf;
-use crate::engine::commands::EngineCommand;
 
 /// Identifies all possible actions triggered by UI interactions (Touch or Keyboard)
 #[derive(Debug, Clone, PartialEq)]
@@ -104,22 +104,18 @@ impl TouchHitMap {
                     }
                 }
                 HitTarget::ProgressBar { rect } => {
-                    if contains(*rect, col, row) {
-                        if rect.width > 0 {
-                            let rel_x = (col.saturating_sub(rect.x)) as f64;
-                            let pct = (rel_x / (rect.width as f64)).clamp(0.0, 1.0);
-                            return Some(UiAction::Engine(EngineCommand::SeekPercent(pct)));
-                        }
+                    if contains(*rect, col, row) && rect.width > 0 {
+                        let rel_x = (col.saturating_sub(rect.x)) as f64;
+                        let pct = (rel_x / (rect.width as f64)).clamp(0.0, 1.0);
+                        return Some(UiAction::Engine(EngineCommand::SeekPercent(pct)));
                     }
                 }
                 HitTarget::VolumeBar { rect } => {
-                    if contains(*rect, col, row) {
-                        if rect.width > 0 {
-                            let rel_x = (col.saturating_sub(rect.x)) as f64;
-                            let pct = (rel_x / (rect.width as f64)).clamp(0.0, 1.0);
-                            let vol = (pct * 100.0).round() as u32;
-                            return Some(UiAction::Engine(EngineCommand::SetVolume(vol)));
-                        }
+                    if contains(*rect, col, row) && rect.width > 0 {
+                        let rel_x = (col.saturating_sub(rect.x)) as f64;
+                        let pct = (rel_x / (rect.width as f64)).clamp(0.0, 1.0);
+                        let vol = (pct * 100.0).round() as u32;
+                        return Some(UiAction::Engine(EngineCommand::SetVolume(vol)));
                     }
                 }
                 HitTarget::ListRow { rect, action, .. } => {

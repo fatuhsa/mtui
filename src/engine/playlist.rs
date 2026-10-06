@@ -1,6 +1,6 @@
-use std::time::{SystemTime, UNIX_EPOCH};
 use crate::engine::events::LoopMode;
 use crate::engine::track::Track;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Fast, deterministic PRNG (XorShift64) seeded from system time, eliminating external rand crate dependencies
 struct SimpleRng {
@@ -13,7 +13,11 @@ impl SimpleRng {
             .duration_since(UNIX_EPOCH)
             .map(|d| d.as_nanos() as u64)
             .unwrap_or(0xCAFE_BABE_DEAD_BEEF);
-        let state = if nanos == 0 { 0x1234_5678_9ABC_DEF0 } else { nanos };
+        let state = if nanos == 0 {
+            0x1234_5678_9ABC_DEF0
+        } else {
+            nanos
+        };
         Self { state }
     }
 
@@ -44,6 +48,12 @@ pub struct Playlist {
     shuffle_enabled: bool,
     shuffled_order: Vec<usize>,
     shuffle_pos: usize,
+}
+
+impl Default for Playlist {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Playlist {
@@ -178,6 +188,7 @@ impl Playlist {
     }
 
     /// Calculates the next track index taking into account loop modes and shuffle
+    #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> Option<usize> {
         if self.tracks.is_empty() {
             return None;
@@ -248,7 +259,7 @@ impl Playlist {
                 self.current_index = Some(prev_idx);
                 return Some(prev_idx);
             } else {
-                return self.current_index;
+                return None;
             }
         }
 
@@ -263,12 +274,17 @@ impl Playlist {
                     self.current_index = Some(last_idx);
                     Some(last_idx)
                 } else {
-                    Some(0)
+                    None
                 }
             }
             None => {
-                self.current_index = Some(0);
-                Some(0)
+                if !self.tracks.is_empty() {
+                    let last = self.tracks.len() - 1;
+                    self.current_index = Some(last);
+                    Some(last)
+                } else {
+                    None
+                }
             }
         }
     }

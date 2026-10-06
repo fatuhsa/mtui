@@ -58,7 +58,9 @@ impl Theme {
     }
 
     pub fn title_style(&self) -> Style {
-        Style::default().fg(self.primary).add_modifier(Modifier::BOLD)
+        Style::default()
+            .fg(self.primary)
+            .add_modifier(Modifier::BOLD)
     }
 
     pub fn active_tab_style(&self) -> Style {
@@ -93,15 +95,13 @@ impl Theme {
 
     pub fn status_style(&self, status: crate::engine::events::PlaybackStatus) -> Style {
         match status {
-            crate::engine::events::PlaybackStatus::Playing => {
-                Style::default().fg(self.playing).add_modifier(Modifier::BOLD)
-            }
-            crate::engine::events::PlaybackStatus::Paused => {
-                Style::default().fg(self.paused).add_modifier(Modifier::BOLD)
-            }
-            crate::engine::events::PlaybackStatus::Stopped => {
-                Style::default().fg(self.stopped)
-            }
+            crate::engine::events::PlaybackStatus::Playing => Style::default()
+                .fg(self.playing)
+                .add_modifier(Modifier::BOLD),
+            crate::engine::events::PlaybackStatus::Paused => Style::default()
+                .fg(self.paused)
+                .add_modifier(Modifier::BOLD),
+            crate::engine::events::PlaybackStatus::Stopped => Style::default().fg(self.stopped),
         }
     }
 }

@@ -1,19 +1,19 @@
 pub mod cover;
 pub mod hitmap;
 pub mod responsive;
-pub mod theme;
 pub mod termux_backend;
+pub mod theme;
 pub mod views;
 pub mod visualizer;
 pub mod widgets;
 
-use std::path::{Path, PathBuf};
 use crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Style};
 use ratatui::widgets::{Block, Borders, Widget};
 use ratatui::Frame;
+use std::path::{Path, PathBuf};
 
 pub use cover::{CoverArtManager, CoverProtocol};
 pub use hitmap::{TouchHitMap, UiAction};
@@ -84,6 +84,12 @@ pub struct AppUi {
     pub queue_selected: Option<usize>,
 }
 
+impl Default for AppUi {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AppUi {
     pub fn new() -> Self {
         let default_dir = detect_default_music_dirs()
@@ -127,8 +133,8 @@ impl AppUi {
     }
 
     pub fn browser_up(&mut self) {
-        if let Some(parent) = self.browser_dir.parent() {
-            self.navigate_browser(parent.to_path_buf());
+        if let Some(parent) = self.browser_dir.parent().map(Path::to_path_buf) {
+            self.navigate_browser(parent);
         }
     }
 
@@ -157,7 +163,9 @@ impl AppUi {
             KeyCode::Char('l') => Some(UiAction::Engine(EngineCommand::CycleLoopMode)),
             KeyCode::Left => Some(UiAction::Engine(EngineCommand::SeekRelative(-5.0))),
             KeyCode::Right => Some(UiAction::Engine(EngineCommand::SeekRelative(5.0))),
-            KeyCode::Char('+') | KeyCode::Char('=') => Some(UiAction::Engine(EngineCommand::AdjustVolume(5))),
+            KeyCode::Char('+') | KeyCode::Char('=') => {
+                Some(UiAction::Engine(EngineCommand::AdjustVolume(5)))
+            }
             KeyCode::Char('-') => Some(UiAction::Engine(EngineCommand::AdjustVolume(-5))),
             KeyCode::Tab => {
                 let next_tab = self.current_tab.next();
@@ -302,12 +310,12 @@ impl AppUi {
 
         // Update visualizer state (continuous time and beat tracking)
         let is_playing = state.status == PlaybackStatus::Playing;
-        let track_path_str = state.current_track.as_ref().map(|t| t.path.to_string_lossy());
-        self.visualizer.update_state(
-            state.position_secs,
-            is_playing,
-            track_path_str.as_deref(),
-        );
+        let track_path_str = state
+            .current_track
+            .as_ref()
+            .map(|t| t.path.to_string_lossy());
+        self.visualizer
+            .update_state(state.position_secs, is_playing, track_path_str.as_deref());
 
         // 1. Draw Top Tab Bar with Touch Targets (including Minimize and Quit)
         self.draw_tab_bar(tab_area, frame.buffer_mut(), profile);
@@ -385,14 +393,14 @@ impl AppUi {
             let min_rect = Rect::new(inner.x + inner.width.saturating_sub(12), inner.y, 5, 1);
             min_btn.render_and_register(min_rect, buf, &mut self.hitmap);
 
-            let quit_btn = TouchButton::new("", UiAction::Quit)
-                .style(Style::default().fg(Color::Red));
+            let quit_btn =
+                TouchButton::new("", UiAction::Quit).style(Style::default().fg(Color::Red));
             let quit_rect = Rect::new(inner.x + inner.width.saturating_sub(6), inner.y, 5, 1);
             quit_btn.render_and_register(quit_rect, buf, &mut self.hitmap);
             14u16
         } else if inner.width > 12 {
-            let quit_btn = TouchButton::new("", UiAction::Quit)
-                .style(Style::default().fg(Color::Red));
+            let quit_btn =
+                TouchButton::new("", UiAction::Quit).style(Style::default().fg(Color::Red));
             let quit_rect = Rect::new(inner.x + inner.width.saturating_sub(6), inner.y, 5, 1);
             quit_btn.render_and_register(quit_rect, buf, &mut self.hitmap);
             8u16
@@ -428,7 +436,7 @@ impl AppUi {
                 icon.to_string()
             };
 
-            let btn_w = (label.chars().count() as u16) + 4;
+            let btn_w = (crate::util::display_width(&label) as u16) + 4;
             if x + btn_w <= inner.x + avail_tab_w {
                 let btn_rect = Rect::new(x, inner.y, btn_w, 1);
                 TouchButton::new(&label, UiAction::SwitchTab(tab.to_index()))

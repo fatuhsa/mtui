@@ -1,7 +1,7 @@
+use crate::ui::hitmap::{TouchHitMap, UiAction};
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
-use crate::ui::hitmap::{TouchHitMap, UiAction};
 
 /// A touch-friendly button widget with explicit hit-target registration
 pub struct TouchButton<'a> {
@@ -39,24 +39,29 @@ impl<'a> TouchButton<'a> {
 
         hitmap.register_button(area, self.action);
 
+        let mut style = self.style;
+        if self.highlight {
+            style = style.add_modifier(ratatui::style::Modifier::REVERSED);
+        }
+
         let formatted = format!("[ {} ]", self.label);
-        let char_count = formatted.chars().count();
+        let form_w = crate::util::display_width(&formatted);
         let max_w = area.width as usize;
 
-        if char_count <= max_w {
-            let offset_x = area.x + ((area.width.saturating_sub(char_count as u16)) / 2);
-            buf.set_string(offset_x, area.y, &formatted, self.style);
+        if form_w <= max_w {
+            let offset_x = area.x + ((area.width.saturating_sub(form_w as u16)) / 2);
+            buf.set_string(offset_x, area.y, &formatted, style);
         } else {
             // Try compact format without inner padding "[label]"
             let compact = format!("[{}]", self.label);
-            let compact_count = compact.chars().count();
-            if compact_count <= max_w {
-                let offset_x = area.x + ((area.width.saturating_sub(compact_count as u16)) / 2);
-                buf.set_string(offset_x, area.y, &compact, self.style);
+            let comp_w = crate::util::display_width(&compact);
+            if comp_w <= max_w {
+                let offset_x = area.x + ((area.width.saturating_sub(comp_w as u16)) / 2);
+                buf.set_string(offset_x, area.y, &compact, style);
             } else {
-                // If still too small, safely take full characters
-                let chars: String = compact.chars().take(max_w).collect();
-                buf.set_string(area.x, area.y, &chars, self.style);
+                // If still too small, safely truncate to width without char splitting or overflow
+                let truncated = crate::util::truncate_to_width(&compact, max_w);
+                buf.set_string(area.x, area.y, truncated, style);
             }
         }
     }

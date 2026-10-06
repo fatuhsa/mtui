@@ -1,5 +1,3 @@
-use std::io::{self, stdout, Write};
-use std::time::{Duration, Instant};
 use crossterm::event::{
     self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyModifiers,
 };
@@ -8,6 +6,8 @@ use crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
 };
 use ratatui::Terminal;
+use std::io::{self, stdout, Write};
+use std::time::{Duration, Instant};
 
 use mtui::engine::{AudioEngine, EngineCommand, EngineStateSnapshot, MockBackend, MpvBackend};
 use mtui::ui::{AppUi, TermuxBackend, UiAction};
@@ -51,7 +51,10 @@ fn main() -> anyhow::Result<()> {
     let (engine, state_rx) = match MpvBackend::new() {
         Ok(mpv) => AudioEngine::start(mpv),
         Err(e) => {
-            eprintln!("Warning: Failed to initialize MPV ({}), falling back to mock backend", e);
+            eprintln!(
+                "Warning: Failed to initialize MPV ({}), falling back to mock backend",
+                e
+            );
             AudioEngine::start(MockBackend::new())
         }
     };

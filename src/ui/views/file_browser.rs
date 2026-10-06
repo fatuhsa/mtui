@@ -1,9 +1,9 @@
-use std::fs;
-use std::path::{Path, PathBuf};
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Alignment, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::widgets::{Block, Borders, Paragraph, Widget};
+use std::fs;
+use std::path::{Path, PathBuf};
 
 use crate::engine::track::Track;
 use crate::ui::hitmap::{TouchHitMap, UiAction};
@@ -60,6 +60,7 @@ impl FileBrowserView {
         items
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn render(
         area: Rect,
         buf: &mut Buffer,
@@ -92,31 +93,53 @@ impl FileBrowserView {
 
         // 1. Current Path Display & Action Buttons
         let path_str = current_dir.to_string_lossy();
-        let display_path = crate::util::truncate_left_with_ellipsis(&path_str, inner.width as usize, "...");
+        let display_path =
+            crate::util::truncate_left_with_ellipsis(&path_str, inner.width as usize, "...");
 
-        let path_p = Paragraph::new(display_path).style(Style::default().fg(theme.primary).add_modifier(Modifier::BOLD));
+        let path_p = Paragraph::new(display_path).style(
+            Style::default()
+                .fg(theme.primary)
+                .add_modifier(Modifier::BOLD),
+        );
         path_p.render(Rect::new(inner.x, cur_y, inner.width, 1), buf);
         cur_y += 1;
 
         // Button row: [  .. Up ] [  Add All ] [ ▲ ] [ ▼ ]
-        let up_btn = TouchButton::new(" .. Up", UiAction::BrowseParent)
-            .style(theme.button_style());
-        let add_all_btn = TouchButton::new(" Add All", UiAction::BrowseAddAll(current_dir.to_path_buf()))
-            .style(Style::default().fg(theme.secondary));
+        let up_btn =
+            TouchButton::new(" .. Up", UiAction::BrowseParent).style(theme.button_style());
+        let add_all_btn = TouchButton::new(
+            " Add All",
+            UiAction::BrowseAddAll(current_dir.to_path_buf()),
+        )
+        .style(Style::default().fg(theme.secondary));
 
         let up_w = 11u16.min(inner.width);
         up_btn.render_and_register(Rect::new(inner.x, cur_y, up_w, 1), buf, hitmap);
 
         if inner.width > up_w + 14 {
-            add_all_btn.render_and_register(Rect::new(inner.x + up_w + 1, cur_y, 13, 1), buf, hitmap);
+            add_all_btn.render_and_register(
+                Rect::new(inner.x + up_w + 1, cur_y, 13, 1),
+                buf,
+                hitmap,
+            );
         }
 
         // Scroll touch buttons on the right edge
         if inner.width > 35 {
-            let scroll_up = TouchButton::new("▲", UiAction::ScrollUp).style(Style::default().fg(theme.muted));
-            let scroll_dn = TouchButton::new("▼", UiAction::ScrollDown).style(Style::default().fg(theme.muted));
-            scroll_up.render_and_register(Rect::new(inner.x + inner.width - 10, cur_y, 5, 1), buf, hitmap);
-            scroll_dn.render_and_register(Rect::new(inner.x + inner.width - 5, cur_y, 5, 1), buf, hitmap);
+            let scroll_up =
+                TouchButton::new("▲", UiAction::ScrollUp).style(Style::default().fg(theme.muted));
+            let scroll_dn =
+                TouchButton::new("▼", UiAction::ScrollDown).style(Style::default().fg(theme.muted));
+            scroll_up.render_and_register(
+                Rect::new(inner.x + inner.width - 10, cur_y, 5, 1),
+                buf,
+                hitmap,
+            );
+            scroll_dn.render_and_register(
+                Rect::new(inner.x + inner.width - 5, cur_y, 5, 1),
+                buf,
+                hitmap,
+            );
         }
 
         cur_y += 2;
@@ -159,19 +182,28 @@ impl FileBrowserView {
 
             // Row styling
             let (prefix, icon_style) = if item.is_dir {
-                (" ", Style::default().fg(theme.primary).add_modifier(Modifier::BOLD))
+                (
+                    " ",
+                    Style::default()
+                        .fg(theme.primary)
+                        .add_modifier(Modifier::BOLD),
+                )
             } else {
                 (" ", Style::default().fg(theme.text))
             };
 
             let row_style = if is_selected {
-                Style::default().fg(Color::Black).bg(theme.primary).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(Color::Black)
+                    .bg(theme.primary)
+                    .add_modifier(Modifier::BOLD)
             } else {
                 icon_style
             };
 
             let max_name_len = inner.width.saturating_sub(10) as usize;
-            let truncated_name = crate::util::truncate_with_ellipsis(&item.name, max_name_len, "...");
+            let truncated_name =
+                crate::util::truncate_with_ellipsis(&item.name, max_name_len, "...");
             let display_name = format!("{}{}", prefix, truncated_name);
 
             buf.set_string(inner.x, item_y, &display_name, row_style);

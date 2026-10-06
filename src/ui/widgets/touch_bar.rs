@@ -1,7 +1,7 @@
+use crate::ui::hitmap::TouchHitMap;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
-use crate::ui::hitmap::TouchHitMap;
 
 pub enum BarKind {
     Progress,
@@ -64,8 +64,8 @@ impl<'a> TouchBar<'a> {
             return;
         }
 
-        let left_w = self.left_label.len() as u16;
-        let right_w = self.right_label.len() as u16;
+        let left_w = crate::util::display_width(self.left_label) as u16;
+        let right_w = crate::util::display_width(self.right_label) as u16;
 
         // Render left label
         if left_w > 0 && area.width > left_w {
@@ -100,7 +100,8 @@ impl<'a> TouchBar<'a> {
         }
 
         // Draw track slider: filled chars, knob, empty chars
-        let filled_chars = ((self.current_fraction * (bar_width as f64)).round() as u16).min(bar_width);
+        let filled_chars =
+            ((self.current_fraction * (bar_width as f64)).round() as u16).min(bar_width);
 
         for i in 0..bar_width {
             let cur_x = bar_start_x + i;

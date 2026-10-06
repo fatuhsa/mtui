@@ -13,6 +13,7 @@ use crate::ui::widgets::TouchButton;
 pub struct QueueView;
 
 impl QueueView {
+    #[allow(clippy::too_many_arguments)]
     pub fn render(
         area: Rect,
         buf: &mut Buffer,
@@ -54,15 +55,23 @@ impl QueueView {
         };
         let loop_btn = TouchButton::new(loop_label, UiAction::Engine(EngineCommand::CycleLoopMode))
             .style(if state.loop_mode != LoopMode::Off {
-                Style::default().fg(theme.secondary).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(theme.secondary)
+                    .add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(theme.muted)
             });
 
-        let shuf_label = if state.shuffle_enabled { " ON" } else { " OFF" };
+        let shuf_label = if state.shuffle_enabled {
+            " ON"
+        } else {
+            " OFF"
+        };
         let shuf_btn = TouchButton::new(shuf_label, UiAction::Engine(EngineCommand::ToggleShuffle))
             .style(if state.shuffle_enabled {
-                Style::default().fg(theme.secondary).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(theme.secondary)
+                    .add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(theme.muted)
             });
@@ -82,10 +91,20 @@ impl QueueView {
 
         // Scroll touch buttons on the right edge
         if inner.width > 35 {
-            let scroll_up = TouchButton::new("▲", UiAction::ScrollUp).style(Style::default().fg(theme.muted));
-            let scroll_dn = TouchButton::new("▼", UiAction::ScrollDown).style(Style::default().fg(theme.muted));
-            scroll_up.render_and_register(Rect::new(inner.x + inner.width - 10, cur_y, 5, 1), buf, hitmap);
-            scroll_dn.render_and_register(Rect::new(inner.x + inner.width - 5, cur_y, 5, 1), buf, hitmap);
+            let scroll_up =
+                TouchButton::new("▲", UiAction::ScrollUp).style(Style::default().fg(theme.muted));
+            let scroll_dn =
+                TouchButton::new("▼", UiAction::ScrollDown).style(Style::default().fg(theme.muted));
+            scroll_up.render_and_register(
+                Rect::new(inner.x + inner.width - 10, cur_y, 5, 1),
+                buf,
+                hitmap,
+            );
+            scroll_dn.render_and_register(
+                Rect::new(inner.x + inner.width - 5, cur_y, 5, 1),
+                buf,
+                hitmap,
+            );
         }
 
         cur_y += 2;
@@ -104,7 +123,12 @@ impl QueueView {
             return;
         }
 
-        let visible_items = state.queue.iter().enumerate().skip(scroll_offset).take(available_rows);
+        let visible_items = state
+            .queue
+            .iter()
+            .enumerate()
+            .skip(scroll_offset)
+            .take(available_rows);
 
         for (rel_idx, (idx, track)) in visible_items.enumerate() {
             let item_y = cur_y + (rel_idx as u16);
@@ -118,12 +142,26 @@ impl QueueView {
             let row_rect = Rect::new(inner.x, item_y, inner.width, 1);
 
             // Tap row to play track immediately!
-            hitmap.register_list_row(row_rect, idx, UiAction::Engine(EngineCommand::PlayIndex(idx)));
+            hitmap.register_list_row(
+                row_rect,
+                idx,
+                UiAction::Engine(EngineCommand::PlayIndex(idx)),
+            );
 
             let (marker, marker_style) = if is_current {
                 match state.status {
-                    PlaybackStatus::Playing => (" ", Style::default().fg(theme.playing).add_modifier(Modifier::BOLD)),
-                    PlaybackStatus::Paused => (" ", Style::default().fg(theme.paused).add_modifier(Modifier::BOLD)),
+                    PlaybackStatus::Playing => (
+                        " ",
+                        Style::default()
+                            .fg(theme.playing)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    PlaybackStatus::Paused => (
+                        " ",
+                        Style::default()
+                            .fg(theme.paused)
+                            .add_modifier(Modifier::BOLD),
+                    ),
                     PlaybackStatus::Stopped => (" ", Style::default().fg(theme.stopped)),
                 }
             } else {
@@ -131,7 +169,10 @@ impl QueueView {
             };
 
             let row_style = if is_selected {
-                Style::default().fg(Color::Black).bg(theme.primary).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(Color::Black)
+                    .bg(theme.primary)
+                    .add_modifier(Modifier::BOLD)
             } else if is_current {
                 marker_style
             } else {
@@ -140,15 +181,17 @@ impl QueueView {
 
             let max_name_len = inner.width.saturating_sub(12) as usize;
             let display_name = track.display_name();
-            let truncated_name = crate::util::truncate_with_ellipsis(&display_name, max_name_len, "...");
+            let truncated_name =
+                crate::util::truncate_with_ellipsis(&display_name, max_name_len, "...");
 
             let text = format!("{}{}. {}", marker, idx + 1, truncated_name);
             buf.set_string(inner.x, item_y, &text, row_style);
 
             // Touch remove button [  ] on right edge
             if inner.width > 25 {
-                let remove_btn = TouchButton::new("", UiAction::Engine(EngineCommand::RemoveIndex(idx)))
-                    .style(Style::default().fg(Color::Red));
+                let remove_btn =
+                    TouchButton::new("", UiAction::Engine(EngineCommand::RemoveIndex(idx)))
+                        .style(Style::default().fg(Color::Red));
                 let remove_rect = Rect::new(inner.x + inner.width - 5, item_y, 5, 1);
                 remove_btn.render_and_register(remove_rect, buf, hitmap);
             }

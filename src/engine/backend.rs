@@ -33,11 +33,14 @@ pub struct MpvBackend {
     request_counter: AtomicU64,
 }
 
+static BACKEND_ID_COUNTER: AtomicU64 = AtomicU64::new(1);
+
 impl MpvBackend {
     pub fn new() -> Result<Self, String> {
         let temp_dir = std::env::temp_dir();
         let pid = std::process::id();
-        let socket_path = temp_dir.join(format!("mtui_mpv_{}.sock", pid));
+        let seq = BACKEND_ID_COUNTER.fetch_add(1, Ordering::SeqCst);
+        let socket_path = temp_dir.join(format!("mtui_mpv_{}_{}.sock", pid, seq));
 
         // Clean up stale socket if present
         let _ = std::fs::remove_file(&socket_path);
@@ -68,6 +71,15 @@ impl MpvBackend {
         let start = Instant::now();
         let mut connected = false;
         while start.elapsed() < Duration::from_millis(1500) {
+            if let Some(child) = backend.child.as_mut() {
+                if let Ok(Some(status)) = child.try_wait() {
+                    let _ = backend.shutdown();
+                    return Err(format!(
+                        "mpv process exited prematurely with status: {}",
+                        status
+                    ));
+                }
+            }
             if backend.socket_path.exists() {
                 if let Ok(stream) = UnixStream::connect(&backend.socket_path) {
                     stream
@@ -91,7 +103,7 @@ impl MpvBackend {
         }
 
         if !connected {
-            backend.stop().ok();
+            let _ = backend.shutdown();
             return Err("Timed out connecting to mpv IPC socket".to_string());
         }
 
@@ -101,7 +113,10 @@ impl MpvBackend {
         Ok(backend)
     }
 
-    fn send_ipc_command(&mut self, command: Vec<serde_json::Value>) -> Result<serde_json::Value, String> {
+    fn send_ipc_command(
+        &mut self,
+        command: Vec<serde_json::Value>,
+    ) -> Result<serde_json::Value, String> {
         let req_id = self.request_counter.fetch_add(1, Ordering::SeqCst);
         let payload = serde_json::json!({
             "command": command,
@@ -113,8 +128,8 @@ impl MpvBackend {
             .as_mut()
             .ok_or_else(|| "MPV IPC stream not connected".to_string())?;
 
-        let mut json_str = serde_json::to_string(&payload)
-            .map_err(|e| format!("Serialization error: {}", e))?;
+        let mut json_str =
+            serde_json::to_string(&payload).map_err(|e| format!("Serialization error: {}", e))?;
         json_str.push('\n');
 
         stream
@@ -144,7 +159,10 @@ impl MpvBackend {
                             if id == req_id {
                                 if let Some(err) = val.get("error").and_then(|v| v.as_str()) {
                                     if err == "success" {
-                                        return Ok(val.get("data").cloned().unwrap_or(serde_json::Value::Null));
+                                        return Ok(val
+                                            .get("data")
+                                            .cloned()
+                                            .unwrap_or(serde_json::Value::Null));
                                     } else {
                                         return Err(format!("mpv error: {}", err));
                                     }
@@ -154,7 +172,10 @@ impl MpvBackend {
                         }
                     }
                 }
-                Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut || e.kind() == std::io::ErrorKind::WouldBlock => {
+                Err(ref e)
+                    if e.kind() == std::io::ErrorKind::TimedOut
+                        || e.kind() == std::io::ErrorKind::WouldBlock =>
+                {
                     std::thread::sleep(Duration::from_millis(10));
                 }
                 Err(e) => return Err(format!("Socket read error: {}", e)),
@@ -164,11 +185,18 @@ impl MpvBackend {
         Err("MPV IPC request timed out".to_string())
     }
 
-    fn get_property<T: serde::de::DeserializeOwned>(&mut self, property: &str) -> Result<Option<T>, String> {
-        let val = self.send_ipc_command(vec![
+    fn get_property<T: serde::de::DeserializeOwned>(
+        &mut self,
+        property: &str,
+    ) -> Result<Option<T>, String> {
+        let val = match self.send_ipc_command(vec![
             serde_json::json!("get_property"),
             serde_json::json!(property),
-        ])?;
+        ]) {
+            Ok(v) => v,
+            Err(e) if e.contains("property unavailable") => return Ok(None),
+            Err(e) => return Err(e),
+        };
 
         if val.is_null() {
             Ok(None)
@@ -183,7 +211,9 @@ impl MpvBackend {
 
 impl AudioBackend for MpvBackend {
     fn load_file(&mut self, path: &Path) -> Result<(), String> {
-        let path_str = path.to_str().ok_or_else(|| "Invalid UTF-8 in path".to_string())?;
+        let path_str = path
+            .to_str()
+            .ok_or_else(|| "Invalid UTF-8 in path".to_string())?;
         self.send_ipc_command(vec![
             serde_json::json!("loadfile"),
             serde_json::json!(path_str),
@@ -243,8 +273,8 @@ impl AudioBackend for MpvBackend {
     }
 
     fn stop(&mut self) -> Result<(), String> {
-        let _ = self.send_ipc_command(vec![serde_json::json!("stop")]);
-        Ok(())
+        self.send_ipc_command(vec![serde_json::json!("stop")])
+            .map(|_| ())
     }
 
     fn shutdown(&mut self) -> Result<(), String> {
@@ -253,8 +283,18 @@ impl AudioBackend for MpvBackend {
         self.stream = None;
         self.reader = None;
         if let Some(mut child) = self.child.take() {
-            let _ = child.kill();
-            let _ = child.wait();
+            let mut exited = false;
+            for _ in 0..10 {
+                if let Ok(Some(_)) = child.try_wait() {
+                    exited = true;
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            if !exited {
+                let _ = child.kill();
+                let _ = child.wait();
+            }
         }
         let _ = std::fs::remove_file(&self.socket_path);
         Ok(())
@@ -276,6 +316,12 @@ pub struct MockBackend {
     pub duration: f64,
     pub volume: u32,
     pub is_idle_state: bool,
+}
+
+impl Default for MockBackend {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl MockBackend {

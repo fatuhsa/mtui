@@ -47,6 +47,7 @@ impl NowPlayingView {
         (art_w, art_h)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn render(
         area: Rect,
         buf: &mut Buffer,
@@ -102,7 +103,10 @@ impl NowPlayingView {
         if inner.height >= 12 && cur_y < max_y {
             let eq_art = match state.status {
                 PlaybackStatus::Playing => {
-                    let num_bars = (inner.width.saturating_sub(6) / 2).clamp(8, 28) as usize;
+                    let max_bars = (inner.width / 2).max(1) as usize;
+                    let num_bars = ((inner.width.saturating_sub(6) / 2) as usize)
+                        .clamp(4, 28)
+                        .min(max_bars);
                     visualizer.render_bars(num_bars)
                 }
                 PlaybackStatus::Paused => "─ ─ [ PAUSED ] ─ ─".to_string(),
@@ -110,7 +114,9 @@ impl NowPlayingView {
             };
 
             let eq_style = match state.status {
-                PlaybackStatus::Playing => Style::default().fg(theme.playing).add_modifier(Modifier::BOLD),
+                PlaybackStatus::Playing => Style::default()
+                    .fg(theme.playing)
+                    .add_modifier(Modifier::BOLD),
                 PlaybackStatus::Paused => Style::default().fg(theme.paused),
                 PlaybackStatus::Stopped => Style::default().fg(theme.stopped),
             };
@@ -169,7 +175,7 @@ impl NowPlayingView {
             let pos_str = format_time(state.position_secs);
             let dur_str = format_time(state.duration_secs);
 
-            let bar_w = inner.width.min(64).max(18);
+            let bar_w = inner.width.clamp(18, 64).min(inner.width);
             let bar_x = inner.x + (inner.width.saturating_sub(bar_w)) / 2;
             let bar_rect = Rect::new(bar_x, cur_y, bar_w, 1);
 
@@ -194,8 +200,13 @@ impl NowPlayingView {
 
             let prev_btn = TouchButton::new(" Prev", UiAction::Engine(EngineCommand::Prev))
                 .style(theme.button_style());
-            let play_btn = TouchButton::new(play_label, UiAction::Engine(EngineCommand::TogglePlay))
-                .style(Style::default().fg(Color::Black).bg(theme.primary).add_modifier(Modifier::BOLD));
+            let play_btn =
+                TouchButton::new(play_label, UiAction::Engine(EngineCommand::TogglePlay)).style(
+                    Style::default()
+                        .fg(Color::Black)
+                        .bg(theme.primary)
+                        .add_modifier(Modifier::BOLD),
+                );
             let next_btn = TouchButton::new(" Next", UiAction::Engine(EngineCommand::Next))
                 .style(theme.button_style());
 
@@ -209,8 +220,16 @@ impl NowPlayingView {
             let start_x = inner.x + (inner.width.saturating_sub(total_w)) / 2;
 
             prev_btn.render_and_register(Rect::new(start_x, cur_y, prev_w, 1), buf, hitmap);
-            play_btn.render_and_register(Rect::new(start_x + prev_w + spacing, cur_y, play_w, 1), buf, hitmap);
-            next_btn.render_and_register(Rect::new(start_x + prev_w + play_w + spacing * 2, cur_y, next_w, 1), buf, hitmap);
+            play_btn.render_and_register(
+                Rect::new(start_x + prev_w + spacing, cur_y, play_w, 1),
+                buf,
+                hitmap,
+            );
+            next_btn.render_and_register(
+                Rect::new(start_x + prev_w + play_w + spacing * 2, cur_y, next_w, 1),
+                buf,
+                hitmap,
+            );
 
             cur_y += 1;
             if spare_rows >= 4 {
@@ -226,22 +245,34 @@ impl NowPlayingView {
                 LoopMode::All => " All",
             };
 
-            let shuf_label = if state.shuffle_enabled { " ON" } else { " OFF" };
+            let shuf_label = if state.shuffle_enabled {
+                " ON"
+            } else {
+                " OFF"
+            };
             let art_label = format!(" {}", cover_mgr.protocol.display_name());
 
-            let loop_btn = TouchButton::new(loop_label, UiAction::Engine(EngineCommand::CycleLoopMode))
-                .style(if state.loop_mode != LoopMode::Off {
-                    Style::default().fg(theme.secondary).add_modifier(Modifier::BOLD)
-                } else {
-                    Style::default().fg(theme.muted)
-                });
+            let loop_btn =
+                TouchButton::new(loop_label, UiAction::Engine(EngineCommand::CycleLoopMode)).style(
+                    if state.loop_mode != LoopMode::Off {
+                        Style::default()
+                            .fg(theme.secondary)
+                            .add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(theme.muted)
+                    },
+                );
 
-            let shuf_btn = TouchButton::new(shuf_label, UiAction::Engine(EngineCommand::ToggleShuffle))
-                .style(if state.shuffle_enabled {
-                    Style::default().fg(theme.secondary).add_modifier(Modifier::BOLD)
-                } else {
-                    Style::default().fg(theme.muted)
-                });
+            let shuf_btn =
+                TouchButton::new(shuf_label, UiAction::Engine(EngineCommand::ToggleShuffle)).style(
+                    if state.shuffle_enabled {
+                        Style::default()
+                            .fg(theme.secondary)
+                            .add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(theme.muted)
+                    },
+                );
 
             let art_btn = TouchButton::new(&art_label, UiAction::CycleCoverProtocol)
                 .style(Style::default().fg(theme.primary));
@@ -286,14 +317,15 @@ impl NowPlayingView {
             let vol_str = format!("Vol: {:3}%", state.volume);
             let vol_frac = (state.volume as f64) / 100.0;
 
-            let minus_btn = TouchButton::new("-", UiAction::Engine(EngineCommand::AdjustVolume(-5)))
-                .style(Style::default().fg(theme.muted));
+            let minus_btn =
+                TouchButton::new("-", UiAction::Engine(EngineCommand::AdjustVolume(-5)))
+                    .style(Style::default().fg(theme.muted));
             let plus_btn = TouchButton::new("+", UiAction::Engine(EngineCommand::AdjustVolume(5)))
                 .style(Style::default().fg(theme.muted));
 
             let minus_w = 5u16;
             let plus_w = 5u16;
-            let total_vol_w = inner.width.min(50).max(22);
+            let total_vol_w = inner.width.clamp(22, 50).min(inner.width);
             let start_vol_x = inner.x + (inner.width.saturating_sub(total_vol_w)) / 2;
             let bar_w = total_vol_w.saturating_sub(minus_w + plus_w + 2);
             let bar_x = start_vol_x + minus_w + 1;
@@ -304,7 +336,11 @@ impl NowPlayingView {
                 .empty_style(theme.progress_empty_style())
                 .label_style(Style::default().fg(theme.muted))
                 .render_and_register(Rect::new(bar_x, cur_y, bar_w, 1), buf, hitmap);
-            plus_btn.render_and_register(Rect::new(start_vol_x + total_vol_w - plus_w, cur_y, plus_w, 1), buf, hitmap);
+            plus_btn.render_and_register(
+                Rect::new(start_vol_x + total_vol_w - plus_w, cur_y, plus_w, 1),
+                buf,
+                hitmap,
+            );
         }
 
         pending_graphic

@@ -1,9 +1,9 @@
+use mtui::engine::commands::EngineCommand;
+use mtui::ui::widgets::Marquee;
+use mtui::ui::{AppTab, AppUi, NowPlayingView, UiAction};
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
-use mtui::engine::commands::EngineCommand;
-use mtui::ui::{AppTab, AppUi, NowPlayingView, UiAction};
-use mtui::ui::widgets::Marquee;
 
 #[test]
 fn test_flexible_art_size_calculation() {
@@ -40,7 +40,10 @@ fn test_tab_switch_sets_clear_and_dirty_flags() {
     // Switch to Files tab
     app.process_action(UiAction::SwitchTab(1), &tx);
     assert_eq!(app.current_tab, AppTab::Files);
-    assert!(app.needs_terminal_clear, "Switching tab must request terminal clear");
+    assert!(
+        app.needs_terminal_clear,
+        "Switching tab must request terminal clear"
+    );
 
     // Reset clear flag like main loop does
     app.needs_terminal_clear = false;
@@ -48,8 +51,14 @@ fn test_tab_switch_sets_clear_and_dirty_flags() {
     // Switch back to NowPlaying tab
     app.process_action(UiAction::SwitchTab(0), &tx);
     assert_eq!(app.current_tab, AppTab::NowPlaying);
-    assert!(app.needs_terminal_clear, "Returning to NowPlaying must request terminal clear");
-    assert!(app.cover_mgr.is_dirty, "Returning to NowPlaying must mark cover dirty");
+    assert!(
+        app.needs_terminal_clear,
+        "Returning to NowPlaying must request terminal clear"
+    );
+    assert!(
+        app.cover_mgr.is_dirty,
+        "Returning to NowPlaying must mark cover dirty"
+    );
 }
 
 #[test]
@@ -74,8 +83,8 @@ fn test_marquee_render_centered() {
 
 #[test]
 fn test_touch_button_unicode_rendering() {
-    use mtui::ui::widgets::TouchButton;
     use mtui::ui::hitmap::TouchHitMap;
+    use mtui::ui::widgets::TouchButton;
 
     let area = Rect::new(0, 0, 10, 1);
     let mut buf = Buffer::empty(area);
@@ -86,8 +95,13 @@ fn test_touch_button_unicode_rendering() {
     let btn = TouchButton::new(" Prev", UiAction::Quit);
     btn.render_and_register(area, &mut buf, &mut hitmap);
 
-    let rendered: String = (0..10).map(|x| buf.cell((x, 0)).unwrap().symbol()).collect();
-    assert_eq!(rendered, "[  Prev ]", "Button must not cut off multi-byte characters or closing brackets");
+    let rendered: String = (0..10)
+        .map(|x| buf.cell((x, 0)).unwrap().symbol())
+        .collect();
+    assert_eq!(
+        rendered, "[  Prev ]",
+        "Button must not cut off multi-byte characters or closing brackets"
+    );
 
     // Minimize button in 5-column box: "[  ]"
     let min_area = Rect::new(0, 0, 5, 1);
@@ -95,8 +109,13 @@ fn test_touch_button_unicode_rendering() {
     let min_btn = TouchButton::new("", UiAction::Minimize);
     min_btn.render_and_register(min_area, &mut min_buf, &mut hitmap);
 
-    let min_rendered: String = (0..5).map(|x| min_buf.cell((x, 0)).unwrap().symbol()).collect();
-    assert_eq!(min_rendered, "[  ]", "Minimize button must render [  ] fully");
+    let min_rendered: String = (0..5)
+        .map(|x| min_buf.cell((x, 0)).unwrap().symbol())
+        .collect();
+    assert_eq!(
+        min_rendered, "[  ]",
+        "Minimize button must render [  ] fully"
+    );
 }
 
 #[test]
@@ -109,7 +128,11 @@ fn test_visualizer_beat_and_physics() {
     // Initial paused state
     vis.update_state(0.0, false, Some("/music/test.mp3"));
     let paused_bars = vis.render_bars(16);
-    assert_eq!(paused_bars.chars().count(), 32, "16 bars with 1 space each = 32 chars");
+    assert_eq!(
+        paused_bars.chars().count(),
+        32,
+        "16 bars with 1 space each = 32 chars"
+    );
 
     // Start playing at 10.0 seconds
     vis.update_state(10.0, true, Some("/music/test.mp3"));
@@ -117,7 +140,11 @@ fn test_visualizer_beat_and_physics() {
 
     // Render 20 bars
     let bars1 = vis.render_bars(20);
-    assert_eq!(bars1.chars().count(), 40, "20 bars with 1 space each = 40 chars");
+    assert_eq!(
+        bars1.chars().count(),
+        40,
+        "20 bars with 1 space each = 40 chars"
+    );
 
     // Seeking to 45.0 seconds
     vis.update_state(45.0, true, Some("/music/test.mp3"));
@@ -135,23 +162,34 @@ fn test_termux_backend_cursor_and_clear() {
     let mut backend = TermuxBackend::new(output);
 
     // Initial position is default (0, 0)
-    let pos = backend.get_cursor_position().expect("Must get cursor position instantly");
+    let pos = backend
+        .get_cursor_position()
+        .expect("Must get cursor position instantly");
     assert_eq!(pos, Position { x: 0, y: 0 });
 
     // Set cursor position updates in-memory tracked pos
-    backend.set_cursor_position(Position { x: 15, y: 8 }).expect("Set cursor position");
-    let pos2 = backend.get_cursor_position().expect("Must return updated position");
+    backend
+        .set_cursor_position(Position { x: 15, y: 8 })
+        .expect("Set cursor position");
+    let pos2 = backend
+        .get_cursor_position()
+        .expect("Must return updated position");
     assert_eq!(pos2, Position { x: 15, y: 8 });
 
     // Wrapping in Terminal and calling clear() must succeed without stdin CPR query
     let mut terminal = Terminal::new(backend).expect("Terminal init");
     let clear_result = terminal.clear();
-    assert!(clear_result.is_ok(), "terminal.clear() must succeed instantly without crossterm CPR timeout");
+    assert!(
+        clear_result.is_ok(),
+        "terminal.clear() must succeed instantly without crossterm CPR timeout"
+    );
 }
 
 #[test]
 fn test_unicode_truncation_cjk_and_emojis() {
-    use mtui::util::{display_width, truncate_left_with_ellipsis, truncate_to_width, truncate_with_ellipsis};
+    use mtui::util::{
+        display_width, truncate_left_with_ellipsis, truncate_to_width, truncate_with_ellipsis,
+    };
 
     let japanese = "宇多田ヒカル - First Love.flac";
     // Each Kanji/Katakana is 2 columns wide
@@ -175,4 +213,95 @@ fn test_unicode_truncation_cjk_and_emojis() {
     let t4 = truncate_left_with_ellipsis(long_path, 25, "...");
     assert!(display_width(&t4) <= 25);
     assert!(t4.starts_with("..."));
+}
+
+#[test]
+fn test_touch_button_cjk_wide_character_display_width() {
+    use mtui::ui::hitmap::TouchHitMap;
+    use mtui::ui::widgets::TouchButton;
+
+    // "播放" is 2 chars, but display width is 4 columns.
+    // "[ 播放 ]" is 8 columns wide.
+    // In an 8-column box, it should fit exactly.
+    let area = Rect::new(0, 0, 8, 1);
+    let mut buf = Buffer::empty(area);
+    let mut hitmap = TouchHitMap::new();
+
+    let btn = TouchButton::new("播放", UiAction::Quit);
+    btn.render_and_register(area, &mut buf, &mut hitmap);
+
+    // Verify 8-column buffer contains opening bracket at 0 and closing bracket at 7
+    assert_eq!(buf.cell((0, 0)).unwrap().symbol(), "[");
+    assert_eq!(buf.cell((7, 0)).unwrap().symbol(), "]");
+
+    // In a 6-column box, "[ 播放 ]" (8 cols) cannot fit, so it falls back to compact format "[播放]" (6 cols).
+    let area_compact = Rect::new(0, 0, 6, 1);
+    let mut buf_compact = Buffer::empty(area_compact);
+    let btn_compact = TouchButton::new("播放", UiAction::Quit);
+    btn_compact.render_and_register(area_compact, &mut buf_compact, &mut hitmap);
+
+    assert_eq!(buf_compact.cell((0, 0)).unwrap().symbol(), "[");
+    assert_eq!(buf_compact.cell((5, 0)).unwrap().symbol(), "]");
+}
+
+#[test]
+fn test_touch_bar_with_unicode_labels() {
+    use mtui::ui::hitmap::TouchHitMap;
+    use mtui::ui::widgets::TouchBar;
+
+    let area = Rect::new(0, 0, 30, 1);
+    let mut buf = Buffer::empty(area);
+    let mut hitmap = TouchHitMap::new();
+
+    // Labels with multibyte unicode characters
+    let bar = TouchBar::progress(0.5, "⏮ 01:23", "03:45 ⏭");
+    bar.render_and_register(area, &mut buf, &mut hitmap);
+
+    // Tap at middle (x: 15, y: 0) should register SeekPercent
+    let tap_action = hitmap.resolve_tap(15, 0);
+    assert!(
+        tap_action.is_some(),
+        "Progress bar must register touch hit target"
+    );
+}
+
+#[test]
+fn test_deterministic_cover_art_hashing() {
+    use mtui::util::{fnv1a_hash, hash_audio_source};
+    use std::path::Path;
+
+    let path = Path::new("/storage/emulated/0/Music/Album/Song.flac");
+    let h1 = hash_audio_source(path);
+    let h2 = hash_audio_source(path);
+    assert_eq!(
+        h1, h2,
+        "Cover art hash must be identical across multiple calls"
+    );
+
+    // Verify fnv1a produces known deterministic hash
+    let raw = fnv1a_hash(b"/music/test.mp3");
+    let raw2 = fnv1a_hash(b"/music/test.mp3");
+    assert_eq!(raw, raw2);
+    assert_ne!(raw, 0);
+}
+
+#[test]
+fn test_touch_button_highlight() {
+    use mtui::ui::hitmap::TouchHitMap;
+    use mtui::ui::widgets::TouchButton;
+    use ratatui::style::Modifier;
+
+    let area = Rect::new(0, 0, 10, 1);
+    let mut buf = Buffer::empty(area);
+    let mut hitmap = TouchHitMap::new();
+
+    let btn = TouchButton::new("Play", UiAction::Quit).highlight(true);
+    btn.render_and_register(area, &mut buf, &mut hitmap);
+
+    // Verify rendered button text cell includes REVERSED modifier (centered in 10-col box at x: 1)
+    let cell_style = buf.cell((1, 0)).unwrap().style();
+    assert!(
+        cell_style.add_modifier.contains(Modifier::REVERSED),
+        "Highlighted button must have REVERSED style modifier"
+    );
 }

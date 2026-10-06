@@ -1,11 +1,11 @@
+use crate::util::get_or_extract_cover_art;
+use ratatui::buffer::Buffer;
+use ratatui::layout::Rect;
+use ratatui::style::{Color, Modifier, Style};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
-use ratatui::buffer::Buffer;
-use ratatui::layout::Rect;
-use ratatui::style::{Color, Modifier, Style};
-use crate::util::get_or_extract_cover_art;
 
 /// Supported terminal image protocols
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -58,10 +58,17 @@ pub struct CoverArtManager {
     resp_rx: Receiver<(PathBuf, CoverProtocol, u16, u16, RenderedCover)>,
 }
 
+impl Default for CoverArtManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CoverArtManager {
     pub fn new() -> Self {
         let (req_tx, req_rx) = mpsc::channel::<(PathBuf, CoverProtocol, u16, u16)>();
-        let (resp_tx, resp_rx) = mpsc::channel::<(PathBuf, CoverProtocol, u16, u16, RenderedCover)>();
+        let (resp_tx, resp_rx) =
+            mpsc::channel::<(PathBuf, CoverProtocol, u16, u16, RenderedCover)>();
 
         // Background worker thread for extracting and converting images
         thread::spawn(move || {
@@ -74,7 +81,8 @@ impl CoverArtManager {
 
                 let (audio_path, proto, width, height) = latest_req;
                 if proto == CoverProtocol::Off {
-                    let _ = resp_tx.send((audio_path, proto, width, height, RenderedCover::VinylArt));
+                    let _ =
+                        resp_tx.send((audio_path, proto, width, height, RenderedCover::VinylArt));
                     continue;
                 }
 
@@ -82,7 +90,8 @@ impl CoverArtManager {
                     let rendered = render_image_with_chafa(&cover_path, proto, width, height);
                     let _ = resp_tx.send((audio_path, proto, width, height, rendered));
                 } else {
-                    let _ = resp_tx.send((audio_path, proto, width, height, RenderedCover::VinylArt));
+                    let _ =
+                        resp_tx.send((audio_path, proto, width, height, RenderedCover::VinylArt));
                 }
             }
         });
@@ -127,6 +136,10 @@ impl CoverArtManager {
             self.current_size = (width, height);
             self.is_dirty = true;
 
+            if track_changed {
+                self.current_rendered = RenderedCover::VinylArt;
+            }
+
             if let Some(path) = path_buf {
                 if width >= 4 && height >= 2 {
                     let _ = self.req_tx.send((path, self.protocol, width, height));
@@ -152,11 +165,7 @@ impl CoverArtManager {
     /// Renders cover art into area.
     /// Returns Some((x, y, escape_str)) ONLY when graphics need to be output to stdout.
     /// Once output, is_dirty is cleared so we do not flood the terminal with escape codes.
-    pub fn render_to_buffer(
-        &mut self,
-        area: Rect,
-        buf: &mut Buffer,
-    ) -> Option<(u16, u16, String)> {
+    pub fn render_to_buffer(&mut self, area: Rect, buf: &mut Buffer) -> Option<(u16, u16, String)> {
         if area.width < 4 || area.height < 2 {
             return None;
         }
@@ -282,7 +291,9 @@ fn render_vinyl_art(area: Rect, buf: &mut Buffer) {
             start_x,
             y,
             *line,
-            Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
         );
     }
 }

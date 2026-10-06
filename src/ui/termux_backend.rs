@@ -1,7 +1,7 @@
-use std::io::{self, Write};
 use ratatui::backend::{Backend, ClearType, CrosstermBackend, WindowSize};
 use ratatui::buffer::Cell;
 use ratatui::layout::{Position, Size};
+use std::io::{self, Write};
 
 /// A robust crossterm backend wrapper tailored for Termux / mobile terminal environments.
 ///

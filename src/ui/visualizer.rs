@@ -1,4 +1,3 @@
-use std::hash::{Hash, Hasher};
 use std::time::Instant;
 
 /// High-performance rhythmic audio visualizer with beat tracking and gravity physics
@@ -16,6 +15,12 @@ pub struct Visualizer {
     track_hash: u64,
 }
 
+impl Default for Visualizer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Visualizer {
     pub fn new() -> Self {
         Self {
@@ -30,9 +35,7 @@ impl Visualizer {
     /// Updates playback state and synchronizes time
     pub fn update_state(&mut self, pos: f64, is_playing: bool, track_path: Option<&str>) {
         if let Some(path) = track_path {
-            let mut hasher = std::collections::hash_map::DefaultHasher::new();
-            path.hash(&mut hasher);
-            self.track_hash = hasher.finish();
+            self.track_hash = crate::util::fnv1a_hash(path.as_bytes());
         }
 
         // Detect seek or normal playback tick
