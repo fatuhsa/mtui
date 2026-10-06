@@ -124,4 +124,30 @@ fn test_visualizer_beat_and_physics() {
     assert!(vis.current_time() >= 45.0 && vis.current_time() < 46.0);
 }
 
+#[test]
+fn test_termux_backend_cursor_and_clear() {
+    use mtui::ui::TermuxBackend;
+    use ratatui::backend::Backend;
+    use ratatui::layout::Position;
+    use ratatui::Terminal;
+
+    let output = Vec::<u8>::new();
+    let mut backend = TermuxBackend::new(output);
+
+    // Initial position is default (0, 0)
+    let pos = backend.get_cursor_position().expect("Must get cursor position instantly");
+    assert_eq!(pos, Position { x: 0, y: 0 });
+
+    // Set cursor position updates in-memory tracked pos
+    backend.set_cursor_position(Position { x: 15, y: 8 }).expect("Set cursor position");
+    let pos2 = backend.get_cursor_position().expect("Must return updated position");
+    assert_eq!(pos2, Position { x: 15, y: 8 });
+
+    // Wrapping in Terminal and calling clear() must succeed without stdin CPR query
+    let mut terminal = Terminal::new(backend).expect("Terminal init");
+    let clear_result = terminal.clear();
+    assert!(clear_result.is_ok(), "terminal.clear() must succeed instantly without crossterm CPR timeout");
+}
+
+
 

@@ -7,21 +7,20 @@ use crossterm::execute;
 use crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
 };
-use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 
 use mtui::engine::{AudioEngine, EngineCommand, EngineStateSnapshot, MockBackend, MpvBackend};
-use mtui::ui::{AppUi, UiAction};
+use mtui::ui::{AppUi, TermuxBackend, UiAction};
 
-fn setup_terminal() -> io::Result<Terminal<CrosstermBackend<io::Stdout>>> {
+fn setup_terminal() -> io::Result<Terminal<TermuxBackend<io::Stdout>>> {
     enable_raw_mode()?;
     let mut stdout = stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
-    let backend = CrosstermBackend::new(stdout);
+    let backend = TermuxBackend::new(stdout);
     Terminal::new(backend)
 }
 
-fn restore_terminal(mut terminal: Terminal<CrosstermBackend<io::Stdout>>) -> io::Result<()> {
+fn restore_terminal(mut terminal: Terminal<TermuxBackend<io::Stdout>>) -> io::Result<()> {
     disable_raw_mode()?;
     execute!(
         terminal.backend_mut(),
@@ -77,10 +76,10 @@ fn main() -> anyhow::Result<()> {
             current_state = new_state;
         }
 
-        // If a terminal clear was requested (e.g. tab change, resize, new track),
+        // If a terminal clear was requested (e.g. tab change, new track),
         // wipe the terminal to eradicate old Sixel/iTerm2 graphics planes
         if app_ui.needs_terminal_clear {
-            terminal.clear()?;
+            let _ = terminal.clear();
             app_ui.needs_terminal_clear = false;
         }
 
@@ -131,7 +130,7 @@ fn main() -> anyhow::Result<()> {
                                 EnableMouseCapture
                             )?;
                             terminal.hide_cursor()?;
-                            terminal.clear()?;
+                            let _ = terminal.clear();
                             app_ui.cover_mgr.mark_dirty();
                         } else if app_ui.process_action(action, &engine_tx) {
                             should_quit = true;
@@ -170,7 +169,7 @@ fn main() -> anyhow::Result<()> {
                                 EnableMouseCapture
                             )?;
                             terminal.hide_cursor()?;
-                            terminal.clear()?;
+                            let _ = terminal.clear();
                             app_ui.cover_mgr.mark_dirty();
                         } else if app_ui.process_action(action, &engine_tx) {
                             should_quit = true;
@@ -178,8 +177,8 @@ fn main() -> anyhow::Result<()> {
                     }
                 }
                 Event::Resize(_, _) => {
-                    // Terminal resized: redrawn automatically on next iteration
-                    app_ui.needs_terminal_clear = true;
+                    // Terminal resized: ratatui handles layout autoresize in next draw;
+                    // mark cover dirty so image recalculates dimensions smoothly without full clear flicker
                     app_ui.cover_mgr.mark_dirty();
                 }
                 _ => {}
