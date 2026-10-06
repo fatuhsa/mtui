@@ -62,7 +62,7 @@ fn main() -> anyhow::Result<()> {
     let engine_tx = engine.command_sender();
 
     let mut last_tick = Instant::now();
-    let tick_rate = Duration::from_millis(150);
+    let tick_rate = Duration::from_millis(33); // ~30 FPS for silky-smooth visualizer
     let mut should_quit = false;
 
     while !should_quit {

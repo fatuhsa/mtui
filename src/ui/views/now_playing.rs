@@ -9,6 +9,7 @@ use crate::ui::cover::CoverArtManager;
 use crate::ui::hitmap::{TouchHitMap, UiAction};
 use crate::ui::responsive::ScreenProfile;
 use crate::ui::theme::Theme;
+use crate::ui::visualizer::Visualizer;
 use crate::ui::widgets::{Marquee, TouchBar, TouchButton};
 use crate::util::format_time;
 
@@ -51,6 +52,7 @@ impl NowPlayingView {
         buf: &mut Buffer,
         state: &EngineStateSnapshot,
         cover_mgr: &mut CoverArtManager,
+        visualizer: &mut Visualizer,
         theme: &Theme,
         profile: ScreenProfile,
         tick: usize,
@@ -96,20 +98,15 @@ impl NowPlayingView {
             }
         }
 
-        // 2. Centered Animated Equalizer
+        // 2. Centered Animated Equalizer (Real-time Beat Synchronized)
         if inner.height >= 12 && cur_y < max_y {
             let eq_art = match state.status {
                 PlaybackStatus::Playing => {
-                    let frames = [
-                        " ▂ ▄ ▆ █ ▇ ▅ ▃  ▂ ▄ ▆ █ ▇ ▅ ▃ ",
-                        "▃ ▅ ▇ █ ▆ ▄ ▂  ▃ ▅ ▇ █ ▆ ▄ ▂ ",
-                        "▄ ▆ █ ▇ ▅ ▃ ▂  ▄ ▆ █ ▇ ▅ ▃ ▂ ",
-                        "▆ █ ▇ ▅ ▃ ▂  ▂ ▄ ▆ █ ▇ ▅ ▃ ▂ ",
-                    ];
-                    frames[tick % frames.len()]
+                    let num_bars = (inner.width.saturating_sub(6) / 2).clamp(8, 28) as usize;
+                    visualizer.render_bars(num_bars)
                 }
-                PlaybackStatus::Paused => "─ ─ [ PAUSED ] ─ ─",
-                PlaybackStatus::Stopped => "─ ─ [ STOPPED ] ─ ─",
+                PlaybackStatus::Paused => "─ ─ [ PAUSED ] ─ ─".to_string(),
+                PlaybackStatus::Stopped => "─ ─ [ STOPPED ] ─ ─".to_string(),
             };
 
             let eq_style = match state.status {
@@ -129,7 +126,9 @@ impl NowPlayingView {
             }
         }
 
-        // 3. Track Title & Artist (Centered Marquee)
+        // 3. Track Title & Artist (Centered Marquee, throttled for ~30 FPS ticks)
+        let marquee_step = tick / 4;
+
         let title_str = state
             .current_track
             .as_ref()
@@ -145,14 +144,14 @@ impl NowPlayingView {
         if cur_y < max_y {
             let title_rect = Rect::new(inner.x, cur_y, inner.width, 1);
             let title_style = Style::default().fg(theme.text).add_modifier(Modifier::BOLD);
-            Marquee::render_centered(title_str, title_rect, tick, buf, title_style);
+            Marquee::render_centered(title_str, title_rect, marquee_step, buf, title_style);
             cur_y += 1;
         }
 
         if cur_y < max_y {
             let artist_rect = Rect::new(inner.x, cur_y, inner.width, 1);
             let artist_style = Style::default().fg(theme.primary);
-            Marquee::render_centered(artist_str, artist_rect, tick, buf, artist_style);
+            Marquee::render_centered(artist_str, artist_rect, marquee_step, buf, artist_style);
             cur_y += 1;
             if spare_rows >= 3 {
                 cur_y += 1;

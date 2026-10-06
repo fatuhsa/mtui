@@ -3,6 +3,7 @@ pub mod hitmap;
 pub mod responsive;
 pub mod theme;
 pub mod views;
+pub mod visualizer;
 pub mod widgets;
 
 use std::path::{Path, PathBuf};
@@ -18,6 +19,7 @@ pub use hitmap::{TouchHitMap, UiAction};
 pub use responsive::ScreenProfile;
 pub use theme::Theme;
 pub use views::*;
+pub use visualizer::Visualizer;
 
 use crate::engine::commands::EngineCommand;
 use crate::engine::events::{EngineStateSnapshot, PlaybackStatus};
@@ -66,6 +68,7 @@ pub struct AppUi {
     pub hitmap: TouchHitMap,
     pub tick: usize,
     pub cover_mgr: CoverArtManager,
+    pub visualizer: Visualizer,
     pub pending_graphic: Option<(u16, u16, String)>,
 
     // File browser state
@@ -96,6 +99,7 @@ impl AppUi {
             hitmap: TouchHitMap::new(),
             tick: 0,
             cover_mgr: CoverArtManager::new(),
+            visualizer: Visualizer::new(),
             pending_graphic: None,
             browser_dir: default_dir,
             browser_items: items,
@@ -294,6 +298,15 @@ impl AppUi {
         let current_path = state.current_track.as_ref().map(|t| t.path.as_path());
         self.cover_mgr.set_track(current_path, art_w, art_h);
 
+        // Update visualizer state (continuous time and beat tracking)
+        let is_playing = state.status == PlaybackStatus::Playing;
+        let track_path_str = state.current_track.as_ref().map(|t| t.path.to_string_lossy());
+        self.visualizer.update_state(
+            state.position_secs,
+            is_playing,
+            track_path_str.as_deref(),
+        );
+
         // 1. Draw Top Tab Bar with Touch Targets (including Minimize and Quit)
         self.draw_tab_bar(tab_area, frame.buffer_mut(), profile);
 
@@ -305,6 +318,7 @@ impl AppUi {
                     frame.buffer_mut(),
                     state,
                     &mut self.cover_mgr,
+                    &mut self.visualizer,
                     &self.theme,
                     profile,
                     self.tick,

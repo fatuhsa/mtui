@@ -99,3 +99,29 @@ fn test_touch_button_unicode_rendering() {
     assert_eq!(min_rendered, "[  ]", "Minimize button must render [  ] fully");
 }
 
+#[test]
+fn test_visualizer_beat_and_physics() {
+    use mtui::ui::Visualizer;
+
+    let mut vis = Visualizer::new();
+    assert_eq!(vis.current_time(), 0.0);
+
+    // Initial paused state
+    vis.update_state(0.0, false, Some("/music/test.mp3"));
+    let paused_bars = vis.render_bars(16);
+    assert_eq!(paused_bars.chars().count(), 32, "16 bars with 1 space each = 32 chars");
+
+    // Start playing at 10.0 seconds
+    vis.update_state(10.0, true, Some("/music/test.mp3"));
+    assert!(vis.current_time() >= 10.0);
+
+    // Render 20 bars
+    let bars1 = vis.render_bars(20);
+    assert_eq!(bars1.chars().count(), 40, "20 bars with 1 space each = 40 chars");
+
+    // Seeking to 45.0 seconds
+    vis.update_state(45.0, true, Some("/music/test.mp3"));
+    assert!(vis.current_time() >= 45.0 && vis.current_time() < 46.0);
+}
+
+
