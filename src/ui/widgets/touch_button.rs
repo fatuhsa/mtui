@@ -40,14 +40,24 @@ impl<'a> TouchButton<'a> {
         hitmap.register_button(area, self.action);
 
         let formatted = format!("[ {} ]", self.label);
-        let max_len = (area.width as usize).min(formatted.len());
-        let slice = &formatted[..max_len];
+        let char_count = formatted.chars().count();
+        let max_w = area.width as usize;
 
-        buf.set_string(
-            area.x,
-            area.y,
-            slice,
-            self.style,
-        );
+        if char_count <= max_w {
+            let offset_x = area.x + ((area.width.saturating_sub(char_count as u16)) / 2);
+            buf.set_string(offset_x, area.y, &formatted, self.style);
+        } else {
+            // Try compact format without inner padding "[label]"
+            let compact = format!("[{}]", self.label);
+            let compact_count = compact.chars().count();
+            if compact_count <= max_w {
+                let offset_x = area.x + ((area.width.saturating_sub(compact_count as u16)) / 2);
+                buf.set_string(offset_x, area.y, &compact, self.style);
+            } else {
+                // If still too small, safely take full characters
+                let chars: String = compact.chars().take(max_w).collect();
+                buf.set_string(area.x, area.y, &chars, self.style);
+            }
+        }
     }
 }

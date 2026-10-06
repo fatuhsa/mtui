@@ -351,7 +351,7 @@ impl AppUi {
         self.draw_status_bar(status_area, frame.buffer_mut(), state);
     }
 
-    fn draw_tab_bar(&mut self, area: Rect, buf: &mut Buffer, profile: ScreenProfile) {
+    fn draw_tab_bar(&mut self, area: Rect, buf: &mut Buffer, _profile: ScreenProfile) {
         let block = Block::default()
             .borders(Borders::ALL)
             .border_style(Style::default().fg(self.theme.border));
@@ -362,15 +362,43 @@ impl AppUi {
             return;
         }
 
+        // Touch Minimize [  ] and Quit [  ] on right edge
+        let right_reserved = if inner.width > 24 {
+            let min_btn = TouchButton::new("", UiAction::Minimize)
+                .style(Style::default().fg(self.theme.secondary));
+            let min_rect = Rect::new(inner.x + inner.width.saturating_sub(12), inner.y, 5, 1);
+            min_btn.render_and_register(min_rect, buf, &mut self.hitmap);
+
+            let quit_btn = TouchButton::new("", UiAction::Quit)
+                .style(Style::default().fg(Color::Red));
+            let quit_rect = Rect::new(inner.x + inner.width.saturating_sub(6), inner.y, 5, 1);
+            quit_btn.render_and_register(quit_rect, buf, &mut self.hitmap);
+            14u16
+        } else if inner.width > 12 {
+            let quit_btn = TouchButton::new("", UiAction::Quit)
+                .style(Style::default().fg(Color::Red));
+            let quit_rect = Rect::new(inner.x + inner.width.saturating_sub(6), inner.y, 5, 1);
+            quit_btn.render_and_register(quit_rect, buf, &mut self.hitmap);
+            8u16
+        } else {
+            0u16
+        };
+
+        let avail_tab_w = inner.width.saturating_sub(right_reserved);
+
         let tabs = [
-            (" Player", AppTab::NowPlaying),
-            (" Files", AppTab::Files),
-            (" Queue", AppTab::Queue),
-            (" Help", AppTab::Help),
+            ("", "Play", AppTab::NowPlaying),
+            ("", "File", AppTab::Files),
+            ("", "Queue", AppTab::Queue),
+            ("", "Help", AppTab::Help),
         ];
 
+        // Total width if all tabs show full "[ icon name ]":
+        // 10 + 1 + 10 + 1 + 11 + 1 + 10 = 44 cols
+        let use_full = avail_tab_w >= 44;
+
         let mut x = inner.x;
-        for (label, tab) in tabs {
+        for (icon, name, tab) in tabs {
             let is_active = self.current_tab == tab;
             let style = if is_active {
                 self.theme.active_tab_style()
@@ -378,43 +406,20 @@ impl AppUi {
                 self.theme.inactive_tab_style()
             };
 
-            let display_label = if profile.is_compact() {
-                match tab {
-                    AppTab::NowPlaying => " Play",
-                    AppTab::Files => " File",
-                    AppTab::Queue => " Queue",
-                    AppTab::Help => " Help",
-                }
+            let label = if use_full || is_active {
+                format!("{} {}", icon, name)
             } else {
-                label
+                icon.to_string()
             };
 
-            let btn_w = (display_label.len() as u16) + 4;
-            if x + btn_w <= inner.x + inner.width.saturating_sub(12) {
+            let btn_w = (label.chars().count() as u16) + 4;
+            if x + btn_w <= inner.x + avail_tab_w {
                 let btn_rect = Rect::new(x, inner.y, btn_w, 1);
-                TouchButton::new(display_label, UiAction::SwitchTab(tab.to_index()))
+                TouchButton::new(&label, UiAction::SwitchTab(tab.to_index()))
                     .style(style)
                     .render_and_register(btn_rect, buf, &mut self.hitmap);
                 x += btn_w + 1;
             }
-        }
-
-        // Touch Minimize [  ] and Quit [  ] on right edge
-        if inner.width > 24 {
-            let min_btn = TouchButton::new("", UiAction::Minimize)
-                .style(Style::default().fg(self.theme.secondary));
-            let min_rect = Rect::new(inner.x + inner.width - 11, inner.y, 5, 1);
-            min_btn.render_and_register(min_rect, buf, &mut self.hitmap);
-
-            let quit_btn = TouchButton::new("", UiAction::Quit)
-                .style(Style::default().fg(Color::Red));
-            let quit_rect = Rect::new(inner.x + inner.width - 5, inner.y, 5, 1);
-            quit_btn.render_and_register(quit_rect, buf, &mut self.hitmap);
-        } else if inner.width > 12 {
-            let quit_btn = TouchButton::new("", UiAction::Quit)
-                .style(Style::default().fg(Color::Red));
-            let quit_rect = Rect::new(inner.x + inner.width - 5, inner.y, 5, 1);
-            quit_btn.render_and_register(quit_rect, buf, &mut self.hitmap);
         }
     }
 

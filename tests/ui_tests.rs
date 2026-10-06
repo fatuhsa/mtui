@@ -20,8 +20,8 @@ fn test_flexible_art_size_calculation() {
 
     // Large desktop terminal (e.g. 100x40 inner)
     let (w, h) = NowPlayingView::calculate_art_size(100, 40);
-    assert_eq!(h, 16, "Cover height clamps to max comfortable size 16");
-    assert_eq!(w, 32, "Cover width is 2 * height");
+    assert_eq!(h, 14, "Cover height clamps to balanced max size 14");
+    assert_eq!(w, 28, "Cover width is 2 * height");
 
     // Narrow terminal (width 16, height 30)
     let (w, h) = NowPlayingView::calculate_art_size(16, 30);
@@ -71,3 +71,31 @@ fn test_marquee_render_centered() {
     assert_eq!(buf.cell((10, 0)).unwrap().symbol(), "l");
     assert_eq!(buf.cell((11, 0)).unwrap().symbol(), "o");
 }
+
+#[test]
+fn test_touch_button_unicode_rendering() {
+    use mtui::ui::widgets::TouchButton;
+    use mtui::ui::hitmap::TouchHitMap;
+
+    let area = Rect::new(0, 0, 10, 1);
+    let mut buf = Buffer::empty(area);
+    let mut hitmap = TouchHitMap::new();
+
+    // "[  Prev ]" has 10 characters (including 3-byte glyph ).
+    // In a 10-column box, the entire string must fit with closing bracket ']'!
+    let btn = TouchButton::new(" Prev", UiAction::Quit);
+    btn.render_and_register(area, &mut buf, &mut hitmap);
+
+    let rendered: String = (0..10).map(|x| buf.cell((x, 0)).unwrap().symbol()).collect();
+    assert_eq!(rendered, "[  Prev ]", "Button must not cut off multi-byte characters or closing brackets");
+
+    // Minimize button in 5-column box: "[  ]"
+    let min_area = Rect::new(0, 0, 5, 1);
+    let mut min_buf = Buffer::empty(min_area);
+    let min_btn = TouchButton::new("", UiAction::Minimize);
+    min_btn.render_and_register(min_area, &mut min_buf, &mut hitmap);
+
+    let min_rendered: String = (0..5).map(|x| min_buf.cell((x, 0)).unwrap().symbol()).collect();
+    assert_eq!(min_rendered, "[  ]", "Minimize button must render [  ] fully");
+}
+

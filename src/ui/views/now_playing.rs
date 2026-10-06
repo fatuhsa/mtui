@@ -22,19 +22,21 @@ impl NowPlayingView {
             return (0, 0);
         }
 
-        // Leave enough rows for controls (Title, Artist, Seek, Buttons, Vol, etc.)
-        let avail_h = inner_h.saturating_sub(9);
+        // Leave room for 7 content rows + spacers (~11-13 rows)
+        let avail_h = inner_h.saturating_sub(11);
         if avail_h < 3 {
             return (0, 0);
         }
 
-        // Cover height scales flexibly: 3 to 16 rows
-        let art_h = avail_h.clamp(3, 16);
+        // Balanced cover height: roughly 42% - 48% of screen height, clamped 4..14
+        let preferred_h = (inner_h * 45 / 100).clamp(4, 14);
+        let art_h = preferred_h.min(avail_h);
+
         // Desired width is 2 * height for 1:1 square image
         let mut art_w = art_h.saturating_mul(2);
 
-        // Limit width so it fits within inner_w with at least 2 cells padding
-        let max_w = inner_w.saturating_sub(2);
+        // Limit width so it fits within inner_w with 4 cells margin
+        let max_w = inner_w.saturating_sub(4);
         if art_w > max_w {
             art_w = max_w;
             let adjusted_h = (art_w / 2).max(3);
@@ -76,22 +78,26 @@ impl NowPlayingView {
         let mut cur_y = inner.y;
         let max_y = inner.y + inner.height;
 
-        // 1. Centered Cover Art
         let (art_w, art_h) = Self::calculate_art_size(inner.width, inner.height);
+
+        // Calculate available spare rows to distribute evenly as spacers
+        let content_rows = if inner.height >= 12 { 7u16 } else { 5u16 };
+        let spare_rows = inner.height.saturating_sub(art_h + content_rows);
+
+        // 1. Centered Cover Art
         if art_w > 0 && art_h > 0 && cur_y + art_h <= max_y {
             let art_x = inner.x + (inner.width.saturating_sub(art_w)) / 2;
             let art_rect = Rect::new(art_x, cur_y, art_w, art_h);
 
             pending_graphic = cover_mgr.render_to_buffer(art_rect, buf);
             cur_y += art_h;
-            if max_y.saturating_sub(cur_y) >= 10 {
+            if spare_rows >= 1 {
                 cur_y += 1;
             }
         }
 
         // 2. Centered Animated Equalizer
-        let remaining_for_eq = max_y.saturating_sub(cur_y);
-        if remaining_for_eq >= 8 {
+        if inner.height >= 12 && cur_y < max_y {
             let eq_art = match state.status {
                 PlaybackStatus::Playing => {
                     let frames = [
@@ -118,7 +124,7 @@ impl NowPlayingView {
                 .render(Rect::new(inner.x, cur_y, inner.width, 1), buf);
 
             cur_y += 1;
-            if remaining_for_eq >= 11 {
+            if spare_rows >= 5 {
                 cur_y += 1;
             }
         }
@@ -148,7 +154,7 @@ impl NowPlayingView {
             let artist_style = Style::default().fg(theme.primary);
             Marquee::render_centered(artist_str, artist_rect, tick, buf, artist_style);
             cur_y += 1;
-            if max_y.saturating_sub(cur_y) >= 7 {
+            if spare_rows >= 3 {
                 cur_y += 1;
             }
         }
@@ -175,7 +181,7 @@ impl NowPlayingView {
                 .render_and_register(bar_rect, buf, hitmap);
 
             cur_y += 1;
-            if max_y.saturating_sub(cur_y) >= 5 {
+            if spare_rows >= 2 {
                 cur_y += 1;
             }
         }
@@ -194,21 +200,21 @@ impl NowPlayingView {
             let next_btn = TouchButton::new(" Next", UiAction::Engine(EngineCommand::Next))
                 .style(theme.button_style());
 
-            let (btn_w, spacing) = if profile.is_compact() {
-                (9u16, 1u16)
+            let (prev_w, play_w, next_w, spacing) = if profile.is_compact() {
+                (10u16, 11u16, 10u16, 1u16)
             } else {
-                (12u16, 2u16)
+                (12u16, 13u16, 12u16, 2u16)
             };
 
-            let total_w = btn_w * 3 + spacing * 2;
+            let total_w = prev_w + play_w + next_w + spacing * 2;
             let start_x = inner.x + (inner.width.saturating_sub(total_w)) / 2;
 
-            prev_btn.render_and_register(Rect::new(start_x, cur_y, btn_w, 1), buf, hitmap);
-            play_btn.render_and_register(Rect::new(start_x + btn_w + spacing, cur_y, btn_w, 1), buf, hitmap);
-            next_btn.render_and_register(Rect::new(start_x + (btn_w + spacing) * 2, cur_y, btn_w, 1), buf, hitmap);
+            prev_btn.render_and_register(Rect::new(start_x, cur_y, prev_w, 1), buf, hitmap);
+            play_btn.render_and_register(Rect::new(start_x + prev_w + spacing, cur_y, play_w, 1), buf, hitmap);
+            next_btn.render_and_register(Rect::new(start_x + prev_w + play_w + spacing * 2, cur_y, next_w, 1), buf, hitmap);
 
             cur_y += 1;
-            if max_y.saturating_sub(cur_y) >= 3 {
+            if spare_rows >= 4 {
                 cur_y += 1;
             }
         }
@@ -243,7 +249,7 @@ impl NowPlayingView {
 
             let loop_w = 9u16;
             let shuf_w = 9u16;
-            let art_w = (art_label.len() as u16) + 4;
+            let art_w = (art_label.chars().count() as u16) + 4;
 
             let (show_shuf, show_art) = if inner.width >= 34 {
                 (true, true)
@@ -271,7 +277,7 @@ impl NowPlayingView {
             }
 
             cur_y += 1;
-            if max_y.saturating_sub(cur_y) >= 2 {
+            if spare_rows >= 6 {
                 cur_y += 1;
             }
         }
@@ -286,10 +292,10 @@ impl NowPlayingView {
             let plus_btn = TouchButton::new("+", UiAction::Engine(EngineCommand::AdjustVolume(5)))
                 .style(Style::default().fg(theme.muted));
 
-            let total_vol_w = inner.width.min(50).max(20);
+            let minus_w = 5u16;
+            let plus_w = 5u16;
+            let total_vol_w = inner.width.min(50).max(22);
             let start_vol_x = inner.x + (inner.width.saturating_sub(total_vol_w)) / 2;
-            let minus_w = 4u16;
-            let plus_w = 4u16;
             let bar_w = total_vol_w.saturating_sub(minus_w + plus_w + 2);
             let bar_x = start_vol_x + minus_w + 1;
 
