@@ -15,7 +15,13 @@ pub trait AudioBackend: Send + 'static {
     fn get_position(&mut self) -> Result<Option<f64>, String>;
     fn get_duration(&mut self) -> Result<Option<f64>, String>;
     fn is_idle(&mut self) -> Result<bool, String>;
+    fn stop_playback(&mut self) -> Result<(), String> {
+        self.stop()
+    }
     fn stop(&mut self) -> Result<(), String>;
+    fn shutdown(&mut self) -> Result<(), String> {
+        Ok(())
+    }
 }
 
 /// MPV backend communicating over Unix Domain Socket JSON IPC
@@ -149,13 +155,13 @@ impl MpvBackend {
                     }
                 }
                 Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut || e.kind() == std::io::ErrorKind::WouldBlock => {
-                    break;
+                    std::thread::sleep(Duration::from_millis(10));
                 }
                 Err(e) => return Err(format!("Socket read error: {}", e)),
             }
         }
 
-        Ok(serde_json::Value::Null)
+        Err("MPV IPC request timed out".to_string())
     }
 
     fn get_property<T: serde::de::DeserializeOwned>(&mut self, property: &str) -> Result<Option<T>, String> {
@@ -238,6 +244,11 @@ impl AudioBackend for MpvBackend {
 
     fn stop(&mut self) -> Result<(), String> {
         let _ = self.send_ipc_command(vec![serde_json::json!("stop")]);
+        Ok(())
+    }
+
+    fn shutdown(&mut self) -> Result<(), String> {
+        let _ = self.send_ipc_command(vec![serde_json::json!("stop")]);
         let _ = self.send_ipc_command(vec![serde_json::json!("quit")]);
         self.stream = None;
         self.reader = None;
@@ -252,7 +263,7 @@ impl AudioBackend for MpvBackend {
 
 impl Drop for MpvBackend {
     fn drop(&mut self) {
-        let _ = self.stop();
+        let _ = self.shutdown();
     }
 }
 

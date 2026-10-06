@@ -65,7 +65,14 @@ impl CoverArtManager {
 
         // Background worker thread for extracting and converting images
         thread::spawn(move || {
-            while let Ok((audio_path, proto, width, height)) = req_rx.recv() {
+            while let Ok(mut latest_req) = req_rx.recv() {
+                // Drain any backlog in queue so rapid resizing / protocol cycling
+                // always processes only the most recent request (latest request wins)
+                while let Ok(newer_req) = req_rx.try_recv() {
+                    latest_req = newer_req;
+                }
+
+                let (audio_path, proto, width, height) = latest_req;
                 if proto == CoverProtocol::Off {
                     let _ = resp_tx.send((audio_path, proto, width, height, RenderedCover::VinylArt));
                     continue;

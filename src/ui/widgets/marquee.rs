@@ -1,6 +1,7 @@
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 /// Auto-scrolling ticker for strings exceeding available display width
 pub struct Marquee;
@@ -39,11 +40,11 @@ impl Marquee {
         }
 
         let max_w = area.width as usize;
-        let char_count = text.chars().count();
+        let total_w = UnicodeWidthStr::width(text);
 
-        if char_count <= max_w {
+        if total_w <= max_w {
             let start_x = if centered {
-                area.x + ((area.width.saturating_sub(char_count as u16)) / 2)
+                area.x + ((area.width.saturating_sub(total_w as u16)) / 2)
             } else {
                 area.x
             };
@@ -55,15 +56,20 @@ impl Marquee {
         let sep = "   •   ";
         let loop_text = format!("{}{}{}", text, sep, text);
         let chars: Vec<char> = loop_text.chars().collect();
-        let loop_len = char_count + sep.chars().count();
+        let loop_len = text.chars().count() + sep.chars().count();
 
         let offset = if loop_len > 0 { step % loop_len } else { 0 };
 
-        let display_chars: String = chars
-            .iter()
-            .skip(offset)
-            .take(max_w)
-            .collect();
+        let mut display_chars = String::new();
+        let mut cur_w = 0;
+        for &ch in chars.iter().skip(offset) {
+            let ch_w = UnicodeWidthChar::width(ch).unwrap_or(0);
+            if cur_w + ch_w > max_w {
+                break;
+            }
+            display_chars.push(ch);
+            cur_w += ch_w;
+        }
 
         buf.set_string(area.x, area.y, display_chars, style);
     }

@@ -85,7 +85,7 @@ impl AudioEngine {
                 if let Ok(cmd) = cmd_res {
                     match cmd {
                         EngineCommand::Quit => {
-                            let _ = backend.stop();
+                            let _ = backend.shutdown();
                             break;
                         }
                         EngineCommand::Play => {
@@ -100,8 +100,9 @@ impl AudioEngine {
                                 } else {
                                     if let Err(e) = backend.load_file(&track.path) {
                                         error_msg = Some(e);
+                                    } else if let Err(e) = backend.play() {
+                                        error_msg = Some(e);
                                     } else {
-                                        let _ = backend.play();
                                         status = PlaybackStatus::Playing;
                                         position_secs = 0.0;
                                         error_msg = None;
@@ -124,12 +125,20 @@ impl AudioEngine {
                         EngineCommand::TogglePlay => {
                             match status {
                                 PlaybackStatus::Playing => {
-                                    let _ = backend.pause();
-                                    status = PlaybackStatus::Paused;
+                                    if let Err(e) = backend.pause() {
+                                        error_msg = Some(e);
+                                    } else {
+                                        status = PlaybackStatus::Paused;
+                                        error_msg = None;
+                                    }
                                 }
                                 PlaybackStatus::Paused => {
-                                    let _ = backend.play();
-                                    status = PlaybackStatus::Playing;
+                                    if let Err(e) = backend.play() {
+                                        error_msg = Some(e);
+                                    } else {
+                                        status = PlaybackStatus::Playing;
+                                        error_msg = None;
+                                    }
                                 }
                                 PlaybackStatus::Stopped => {
                                     if playlist.current_track().is_none() && !playlist.tracks().is_empty() {
@@ -138,8 +147,9 @@ impl AudioEngine {
                                     if let Some(track) = playlist.current_track() {
                                         if let Err(e) = backend.load_file(&track.path) {
                                             error_msg = Some(e);
+                                        } else if let Err(e) = backend.play() {
+                                            error_msg = Some(e);
                                         } else {
-                                            let _ = backend.play();
                                             status = PlaybackStatus::Playing;
                                             position_secs = 0.0;
                                             error_msg = None;
@@ -160,8 +170,9 @@ impl AudioEngine {
                                 if let Some(track) = playlist.current_track() {
                                     if let Err(e) = backend.load_file(&track.path) {
                                         error_msg = Some(e);
+                                    } else if let Err(e) = backend.play() {
+                                        error_msg = Some(e);
                                     } else {
-                                        let _ = backend.play();
                                         status = PlaybackStatus::Playing;
                                         position_secs = 0.0;
                                         duration_secs = 0.0;
@@ -177,14 +188,18 @@ impl AudioEngine {
                         EngineCommand::Prev => {
                             // If current track has played more than 3 seconds, replay from start
                             if position_secs > 3.0 {
-                                let _ = backend.seek(0.0);
-                                position_secs = 0.0;
+                                if let Err(e) = backend.seek(0.0) {
+                                    error_msg = Some(e);
+                                } else {
+                                    position_secs = 0.0;
+                                }
                             } else if let Some(_) = playlist.prev() {
                                 if let Some(track) = playlist.current_track() {
                                     if let Err(e) = backend.load_file(&track.path) {
                                         error_msg = Some(e);
+                                    } else if let Err(e) = backend.play() {
+                                        error_msg = Some(e);
                                     } else {
-                                        let _ = backend.play();
                                         status = PlaybackStatus::Playing;
                                         position_secs = 0.0;
                                         duration_secs = 0.0;
@@ -196,33 +211,49 @@ impl AudioEngine {
                         }
                         EngineCommand::Seek(secs) => {
                             let target = secs.clamp(0.0, duration_secs.max(1.0));
-                            let _ = backend.seek(target);
-                            position_secs = target;
+                            if let Err(e) = backend.seek(target) {
+                                error_msg = Some(e);
+                            } else {
+                                position_secs = target;
+                            }
                             state_changed = true;
                         }
                         EngineCommand::SeekPercent(pct) => {
                             if duration_secs > 0.0 {
                                 let target = (pct.clamp(0.0, 1.0) * duration_secs).clamp(0.0, duration_secs);
-                                let _ = backend.seek(target);
-                                position_secs = target;
+                                if let Err(e) = backend.seek(target) {
+                                    error_msg = Some(e);
+                                } else {
+                                    position_secs = target;
+                                }
                                 state_changed = true;
                             }
                         }
                         EngineCommand::SeekRelative(offset) => {
                             let target = (position_secs + offset).clamp(0.0, duration_secs.max(1.0));
-                            let _ = backend.seek(target);
-                            position_secs = target;
+                            if let Err(e) = backend.seek(target) {
+                                error_msg = Some(e);
+                            } else {
+                                position_secs = target;
+                            }
                             state_changed = true;
                         }
                         EngineCommand::SetVolume(vol) => {
-                            volume = vol.min(100);
-                            let _ = backend.set_volume(volume);
+                            let target_vol = vol.min(100);
+                            if let Err(e) = backend.set_volume(target_vol) {
+                                error_msg = Some(e);
+                            } else {
+                                volume = target_vol;
+                            }
                             state_changed = true;
                         }
                         EngineCommand::AdjustVolume(delta) => {
-                            let new_vol = ((volume as i32) + delta).clamp(0, 100) as u32;
-                            volume = new_vol;
-                            let _ = backend.set_volume(volume);
+                            let target_vol = ((volume as i32) + delta).clamp(0, 100) as u32;
+                            if let Err(e) = backend.set_volume(target_vol) {
+                                error_msg = Some(e);
+                            } else {
+                                volume = target_vol;
+                            }
                             state_changed = true;
                         }
                         EngineCommand::AddTrack(track) => {
@@ -246,8 +277,9 @@ impl AudioEngine {
                             if let Some(cur) = playlist.current_track() {
                                 if let Err(e) = backend.load_file(&cur.path) {
                                     error_msg = Some(e);
+                                } else if let Err(e) = backend.play() {
+                                    error_msg = Some(e);
                                 } else {
-                                    let _ = backend.play();
                                     status = PlaybackStatus::Playing;
                                     position_secs = 0.0;
                                     duration_secs = 0.0;
@@ -260,8 +292,9 @@ impl AudioEngine {
                             if let Some(track) = playlist.select_index(idx) {
                                 if let Err(e) = backend.load_file(&track.path) {
                                     error_msg = Some(e);
+                                } else if let Err(e) = backend.play() {
+                                    error_msg = Some(e);
                                 } else {
-                                    let _ = backend.play();
                                     status = PlaybackStatus::Playing;
                                     position_secs = 0.0;
                                     duration_secs = 0.0;
@@ -317,8 +350,10 @@ impl AudioEngine {
                                     if let Err(e) = backend.load_file(&track.path) {
                                         error_msg = Some(e);
                                         status = PlaybackStatus::Stopped;
+                                    } else if let Err(e) = backend.play() {
+                                        error_msg = Some(e);
+                                        status = PlaybackStatus::Stopped;
                                     } else {
-                                        let _ = backend.play();
                                         position_secs = 0.0;
                                         duration_secs = 0.0;
                                     }

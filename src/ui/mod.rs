@@ -456,11 +456,7 @@ impl AppUi {
 
         let bar_text = format!(" {} │ {} ", status_text, current_song);
         let max_len = area.width as usize;
-        let slice = if bar_text.len() > max_len {
-            &bar_text[..max_len]
-        } else {
-            &bar_text
-        };
+        let slice = crate::util::truncate_to_width(&bar_text, max_len);
 
         buf.set_string(area.x, area.y, slice, status_style);
     }

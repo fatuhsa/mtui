@@ -149,5 +149,30 @@ fn test_termux_backend_cursor_and_clear() {
     assert!(clear_result.is_ok(), "terminal.clear() must succeed instantly without crossterm CPR timeout");
 }
 
+#[test]
+fn test_unicode_truncation_cjk_and_emojis() {
+    use mtui::util::{display_width, truncate_left_with_ellipsis, truncate_to_width, truncate_with_ellipsis};
 
+    let japanese = "宇多田ヒカル - First Love.flac";
+    // Each Kanji/Katakana is 2 columns wide
+    assert_eq!(display_width("宇多田ヒカル"), 12);
 
+    // Truncating in the middle of a 2-column character must not panic and must fit width
+    let t1 = truncate_to_width(japanese, 5);
+    assert!(display_width(t1) <= 5);
+
+    let t2 = truncate_with_ellipsis(japanese, 14, "...");
+    assert!(display_width(&t2) <= 14);
+    assert!(t2.ends_with("..."));
+
+    // Emoji string
+    let emoji_title = "🎵 Music 🎧 Beats 🔥 Fire.mp3";
+    let t3 = truncate_with_ellipsis(emoji_title, 12, "...");
+    assert!(display_width(&t3) <= 12);
+
+    // Left truncation for deep directory paths
+    let long_path = "/storage/emulated/0/Music/J-Pop/Utada/First Love.flac";
+    let t4 = truncate_left_with_ellipsis(long_path, 25, "...");
+    assert!(display_width(&t4) <= 25);
+    assert!(t4.starts_with("..."));
+}

@@ -2,10 +2,16 @@ use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-/// Hash a path into a hex string for caching
-fn hash_path(path: &Path) -> String {
+/// Hash audio path and file metadata into a hex string for caching
+pub fn hash_audio_source(audio_path: &Path) -> String {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    path.hash(&mut hasher);
+    audio_path.hash(&mut hasher);
+    if let Ok(meta) = audio_path.metadata() {
+        meta.len().hash(&mut hasher);
+        if let Ok(mtime) = meta.modified() {
+            mtime.hash(&mut hasher);
+        }
+    }
     format!("{:016x}", hasher.finish())
 }
 
@@ -26,23 +32,40 @@ pub fn get_or_extract_cover_art(audio_path: &Path) -> Option<PathBuf> {
     let temp_dir = std::env::temp_dir().join("mtui_covers");
     let _ = std::fs::create_dir_all(&temp_dir);
 
-    let cache_file = temp_dir.join(format!("{}.jpg", hash_path(audio_path)));
+    let cache_file = temp_dir.join(format!("{}.jpg", hash_audio_source(audio_path)));
     if cache_file.is_file() {
-        if let Ok(meta) = cache_file.metadata() {
-            if meta.len() > 100 {
-                return Some(cache_file);
+        if let Ok(cache_meta) = cache_file.metadata() {
+            if cache_meta.len() > 100 {
+                let is_fresh = if let (Ok(audio_meta), Ok(cache_mtime)) = (audio_path.metadata(), cache_meta.modified()) {
+                    if let Ok(audio_mtime) = audio_meta.modified() {
+                        cache_mtime >= audio_mtime
+                    } else {
+                        true
+                    }
+                } else {
+                    true
+                };
+                if is_fresh {
+                    return Some(cache_file);
+                }
             }
         }
     }
 
     // 3. Extract embedded cover art via ffmpeg
+    // Explicitly transcode first video frame to JPEG format via -vframes 1 -f image2 -c:v mjpeg
+    // so embedded PNG, WebP, or other artwork formats cleanly produce valid JPEG cache files
     let status = Command::new("ffmpeg")
         .arg("-y")
         .arg("-i")
         .arg(audio_path)
         .arg("-an")
-        .arg("-vcodec")
-        .arg("copy")
+        .arg("-vframes")
+        .arg("1")
+        .arg("-f")
+        .arg("image2")
+        .arg("-c:v")
+        .arg("mjpeg")
         .arg(&cache_file)
         .stdin(Stdio::null())
         .stdout(Stdio::null())

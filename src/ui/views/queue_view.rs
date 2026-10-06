@@ -140,11 +140,7 @@ impl QueueView {
 
             let max_name_len = inner.width.saturating_sub(12) as usize;
             let display_name = track.display_name();
-            let truncated_name = if display_name.len() > max_name_len && max_name_len > 3 {
-                format!("{}...", &display_name[..max_name_len - 3])
-            } else {
-                display_name
-            };
+            let truncated_name = crate::util::truncate_with_ellipsis(&display_name, max_name_len, "...");
 
             let text = format!("{}{}. {}", marker, idx + 1, truncated_name);
             buf.set_string(inner.x, item_y, &text, row_style);

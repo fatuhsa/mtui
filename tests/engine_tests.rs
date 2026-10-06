@@ -119,7 +119,52 @@ fn test_audio_engine_commands_and_state_emission() {
     let state = state_rx.recv_timeout(Duration::from_millis(500)).expect("State snapshot received");
     assert_eq!(state.volume, 45);
 
-    // Stop and quit
+    // Stop playback
+    engine.send(EngineCommand::Stop);
+    let state = state_rx.recv_timeout(Duration::from_millis(500)).expect("State snapshot received");
+    assert_eq!(state.status, PlaybackStatus::Stopped);
+
+    // Play again after stop (verifies backend lifecycle remains operational)
+    engine.send(EngineCommand::Play);
+    let state = state_rx.recv_timeout(Duration::from_millis(500)).expect("State snapshot received");
+    assert_eq!(state.status, PlaybackStatus::Playing);
+
+    // Clean quit
+    engine.send(EngineCommand::Quit);
+}
+
+#[test]
+fn test_failing_backend_preserves_error_state() {
+    struct FailingBackend;
+    impl mtui::engine::AudioBackend for FailingBackend {
+        fn load_file(&mut self, _path: &std::path::Path) -> Result<(), String> {
+            Err("Disk read error".to_string())
+        }
+        fn play(&mut self) -> Result<(), String> {
+            Err("Audio device busy".to_string())
+        }
+        fn pause(&mut self) -> Result<(), String> { Ok(()) }
+        fn seek(&mut self, _seconds: f64) -> Result<(), String> { Ok(()) }
+        fn set_volume(&mut self, _volume: u32) -> Result<(), String> { Ok(()) }
+        fn get_position(&mut self) -> Result<Option<f64>, String> { Ok(None) }
+        fn get_duration(&mut self) -> Result<Option<f64>, String> { Ok(None) }
+        fn is_idle(&mut self) -> Result<bool, String> { Ok(true) }
+        fn stop(&mut self) -> Result<(), String> { Ok(()) }
+    }
+
+    let (engine, state_rx) = AudioEngine::start(FailingBackend);
+    let _ = state_rx.recv_timeout(Duration::from_millis(500));
+
+    let track = Track::from_path("/music/error.mp3");
+    engine.send(EngineCommand::AddTrack(track));
+    let _ = state_rx.recv_timeout(Duration::from_millis(500));
+
+    // Play fails on load_file, status must NOT become Playing
+    engine.send(EngineCommand::Play);
+    let state = state_rx.recv_timeout(Duration::from_millis(500)).expect("State received");
+    assert_ne!(state.status, PlaybackStatus::Playing);
+    assert_eq!(state.error_message, Some("Disk read error".to_string()));
+
     engine.send(EngineCommand::Quit);
 }
 

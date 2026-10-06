@@ -92,11 +92,7 @@ impl FileBrowserView {
 
         // 1. Current Path Display & Action Buttons
         let path_str = current_dir.to_string_lossy();
-        let display_path = if path_str.len() > inner.width as usize {
-            format!("...{}", &path_str[path_str.len() - (inner.width as usize - 3)..])
-        } else {
-            path_str.to_string()
-        };
+        let display_path = crate::util::truncate_left_with_ellipsis(&path_str, inner.width as usize, "...");
 
         let path_p = Paragraph::new(display_path).style(Style::default().fg(theme.primary).add_modifier(Modifier::BOLD));
         path_p.render(Rect::new(inner.x, cur_y, inner.width, 1), buf);
@@ -175,11 +171,8 @@ impl FileBrowserView {
             };
 
             let max_name_len = inner.width.saturating_sub(10) as usize;
-            let display_name = if item.name.len() > max_name_len && max_name_len > 3 {
-                format!("{}{}...", prefix, &item.name[..max_name_len - 3])
-            } else {
-                format!("{}{}", prefix, item.name)
-            };
+            let truncated_name = crate::util::truncate_with_ellipsis(&item.name, max_name_len, "...");
+            let display_name = format!("{}{}", prefix, truncated_name);
 
             buf.set_string(inner.x, item_y, &display_name, row_style);
 

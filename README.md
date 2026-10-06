@@ -99,7 +99,7 @@ mtui
   - Type `fg` in Termux at any time to instantly restore the full TUI!
 - **🎵 30 FPS Beat-Synchronized Visualizer**:
   - Stateful real-time visualizer (`src/ui/visualizer.rs`) ticking at smooth 30 FPS.
-  - Beat-synced frequency envelopes modeling **Kick, Sub-bass, Snare, and Hi-hat** timing to match music rhythm.
+  - Lightweight procedural music-reactive simulation modeling **Kick, Sub-bass, Snare, and Hi-hat** rhythms with zero DSP CPU overhead on mobile devices.
   - Physics-based **gravity decay & peak hold falloff** (Cava-style) for smooth, non-stuttering animations.
   - Sub-block Unicode bars (` `, `▂`, `▃`, `▄`, `▅`, `▆`, `▇`, `█`) with dynamic color gradients.
   - Auto-sleep when playback is stopped/paused to preserve mobile battery.
@@ -174,16 +174,18 @@ mtui/
 │   │   ├── cover.rs            # Async Sixel / iTerm2 / HalfBlock cover art renderer
 │   │   ├── visualizer.rs       # 30 FPS beat-synchronized physics audio visualizer
 │   │   ├── hitmap.rs           # TouchHitMap for declarative touch tap & slider resolution
+│   │   ├── termux_backend.rs   # Termux CPR-safe crossterm backend wrapper (zero-timeout zoom)
 │   │   ├── theme.rs            # Mobile high-contrast color palettes
 │   │   ├── responsive.rs       # Compact (portrait) vs Wide (landscape) detector
 │   │   ├── widgets/            # TouchButton, TouchBar (slider), Marquee (ticker)
 │   │   └── views/              # Swappable views: NowPlaying, FileBrowser, Queue, Help
 │   └── util/
-│       ├── cover.rs            # Embedded cover art extraction via ffmpeg
-│       └── storage.rs          # Android storage auto-discovery (/sdcard/Music, ~/storage/music)
+│       ├── cover.rs            # Embedded cover art extraction via ffmpeg + mtime cache
+│       ├── storage.rs          # Android storage auto-discovery (/sdcard/Music, ~/storage/music)
+│       └── text.rs             # Unicode display-width and CJK/emoji safe string truncation
 └── tests/
-    ├── engine_tests.rs         # Automated tests for engine logic, playlist, and shuffle
-    └── ui_tests.rs             # Automated tests for touch hit-mapping and visualizer physics
+    ├── engine_tests.rs         # Automated tests for engine lifecycle, error states, and playlist
+    └── ui_tests.rs             # Automated tests for touch hit-mapping, visualizer, and Unicode truncation
 ```
 
 ---
@@ -194,4 +196,4 @@ mtui/
 cargo test
 ```
 
-All 10 core engine, playlist, shuffle, visualizer physics, and touch hit-mapping tests pass out-of-the-box.
+All 13 core engine lifecycle, error-handling, playlist, shuffle, Unicode CJK/emoji display truncation, visualizer physics, and touch hit-mapping tests pass out-of-the-box.
