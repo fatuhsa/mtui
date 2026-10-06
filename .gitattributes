@@ -1,0 +1,38 @@
+# Set default line ending behavior for all text files (Unix LF)
+* text=auto eol=lf
+
+# Source code
+*.rs text diff=rust eol=lf
+Cargo.toml text eol=lf
+Cargo.lock text eol=lf
+
+# Shell scripts
+*.sh text eol=lf
+
+# Documentation
+*.md text diff=markdown eol=lf
+
+# Config & data
+*.json text eol=lf
+*.toml text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+.gitignore text eol=lf
+.gitattributes text eol=lf
+
+# Binary media formats
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+
+# Audio formats
+*.mp3 binary
+*.flac binary
+*.wav binary
+*.ogg binary
+*.opus binary
+*.m4a binary
+*.aac binary
