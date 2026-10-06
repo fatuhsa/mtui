@@ -13,6 +13,27 @@ impl Marquee {
         buf: &mut Buffer,
         style: Style,
     ) {
+        Self::render_aligned(text, area, step, buf, style, false);
+    }
+
+    pub fn render_centered(
+        text: &str,
+        area: Rect,
+        step: usize,
+        buf: &mut Buffer,
+        style: Style,
+    ) {
+        Self::render_aligned(text, area, step, buf, style, true);
+    }
+
+    fn render_aligned(
+        text: &str,
+        area: Rect,
+        step: usize,
+        buf: &mut Buffer,
+        style: Style,
+        centered: bool,
+    ) {
         if area.width == 0 || area.height == 0 {
             return;
         }
@@ -21,7 +42,12 @@ impl Marquee {
         let char_count = text.chars().count();
 
         if char_count <= max_w {
-            buf.set_string(area.x, area.y, text, style);
+            let start_x = if centered {
+                area.x + ((area.width.saturating_sub(char_count as u16)) / 2)
+            } else {
+                area.x
+            };
+            buf.set_string(start_x, area.y, text, style);
             return;
         }
 
@@ -42,3 +68,4 @@ impl Marquee {
         buf.set_string(area.x, area.y, display_chars, style);
     }
 }
+

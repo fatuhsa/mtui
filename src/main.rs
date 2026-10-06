@@ -68,7 +68,20 @@ fn main() -> anyhow::Result<()> {
     while !should_quit {
         // Check for updated engine state
         while let Ok(new_state) = state_rx.try_recv() {
+            let track_changed = current_state.current_track.as_ref().map(|t| &t.path)
+                != new_state.current_track.as_ref().map(|t| &t.path);
+            if track_changed {
+                app_ui.needs_terminal_clear = true;
+                app_ui.cover_mgr.mark_dirty();
+            }
             current_state = new_state;
+        }
+
+        // If a terminal clear was requested (e.g. tab change, resize, new track),
+        // wipe the terminal to eradicate old Sixel/iTerm2 graphics planes
+        if app_ui.needs_terminal_clear {
+            terminal.clear()?;
+            app_ui.needs_terminal_clear = false;
         }
 
         // Render current UI
@@ -76,8 +89,8 @@ fn main() -> anyhow::Result<()> {
             app_ui.draw(f, &current_state);
         })?;
 
-        // If a terminal graphic (Sixel or iTerm2) was emitted, output directly at target cell
-        if let Some((x, y, ref seq)) = app_ui.pending_graphic {
+        // If a terminal graphic (Sixel, iTerm2, Blocks) was emitted, output directly at target cell
+        if let Some((x, y, ref seq)) = app_ui.pending_graphic.take() {
             print!("\x1b[{};{}H{}", y + 1, x + 1, seq);
             let _ = stdout().flush();
         }
@@ -119,6 +132,7 @@ fn main() -> anyhow::Result<()> {
                             )?;
                             terminal.hide_cursor()?;
                             terminal.clear()?;
+                            app_ui.cover_mgr.mark_dirty();
                         } else if app_ui.process_action(action, &engine_tx) {
                             should_quit = true;
                         }
@@ -157,6 +171,7 @@ fn main() -> anyhow::Result<()> {
                             )?;
                             terminal.hide_cursor()?;
                             terminal.clear()?;
+                            app_ui.cover_mgr.mark_dirty();
                         } else if app_ui.process_action(action, &engine_tx) {
                             should_quit = true;
                         }
@@ -164,6 +179,8 @@ fn main() -> anyhow::Result<()> {
                 }
                 Event::Resize(_, _) => {
                     // Terminal resized: redrawn automatically on next iteration
+                    app_ui.needs_terminal_clear = true;
+                    app_ui.cover_mgr.mark_dirty();
                 }
                 _ => {}
             }

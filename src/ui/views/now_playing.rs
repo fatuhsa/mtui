@@ -15,11 +15,40 @@ use crate::util::format_time;
 pub struct NowPlayingView;
 
 impl NowPlayingView {
+    /// Dynamically computes cover art width and height based on available inner dimensions.
+    /// Cell aspect ratio is ~1:2 (1 row height ≈ 2 col width).
+    pub fn calculate_art_size(inner_w: u16, inner_h: u16) -> (u16, u16) {
+        if inner_w < 10 || inner_h < 8 {
+            return (0, 0);
+        }
+
+        // Leave enough rows for controls (Title, Artist, Seek, Buttons, Vol, etc.)
+        let avail_h = inner_h.saturating_sub(9);
+        if avail_h < 3 {
+            return (0, 0);
+        }
+
+        // Cover height scales flexibly: 3 to 16 rows
+        let art_h = avail_h.clamp(3, 16);
+        // Desired width is 2 * height for 1:1 square image
+        let mut art_w = art_h.saturating_mul(2);
+
+        // Limit width so it fits within inner_w with at least 2 cells padding
+        let max_w = inner_w.saturating_sub(2);
+        if art_w > max_w {
+            art_w = max_w;
+            let adjusted_h = (art_w / 2).max(3);
+            return (art_w, adjusted_h);
+        }
+
+        (art_w, art_h)
+    }
+
     pub fn render(
         area: Rect,
         buf: &mut Buffer,
         state: &EngineStateSnapshot,
-        cover_mgr: &CoverArtManager,
+        cover_mgr: &mut CoverArtManager,
         theme: &Theme,
         profile: ScreenProfile,
         tick: usize,
@@ -47,74 +76,54 @@ impl NowPlayingView {
         let mut cur_y = inner.y;
         let max_y = inner.y + inner.height;
 
-        // 1. Cover Art & Equalizer Section
-        if inner.height >= 14 {
-            let art_w = 20u16.min(inner.width.saturating_sub(4));
-            let art_h = 7u16.min(inner.height.saturating_sub(10));
+        // 1. Centered Cover Art
+        let (art_w, art_h) = Self::calculate_art_size(inner.width, inner.height);
+        if art_w > 0 && art_h > 0 && cur_y + art_h <= max_y {
+            let art_x = inner.x + (inner.width.saturating_sub(art_w)) / 2;
+            let art_rect = Rect::new(art_x, cur_y, art_w, art_h);
 
-            if profile.is_compact() {
-                // Centered Cover Art box
-                let art_x = inner.x + (inner.width.saturating_sub(art_w)) / 2;
-                let art_rect = Rect::new(art_x, cur_y, art_w, art_h);
-
-                pending_graphic = cover_mgr.render_to_buffer(art_rect, buf);
-                cur_y += art_h + 1;
-            } else {
-                // Wide split: Cover Art on Left, Animated Equalizer & Details on Right
-                let art_rect = Rect::new(inner.x + 1, cur_y, art_w, art_h);
-                pending_graphic = cover_mgr.render_to_buffer(art_rect, buf);
-
-                // Right side: Animated Equalizer
-                let right_x = inner.x + art_w + 3;
-                let right_w = inner.width.saturating_sub(art_w + 4);
-
-                let eq_art = match state.status {
-                    PlaybackStatus::Playing => {
-                        let frames = [
-                            " ▂ ▄ ▆ █ ▇ ▅ ▃  ▂ ▄ ▆ █ ▇ ▅ ▃ ",
-                            "▃ ▅ ▇ █ ▆ ▄ ▂  ▃ ▅ ▇ █ ▆ ▄ ▂ ",
-                            "▄ ▆ █ ▇ ▅ ▃ ▂  ▄ ▆ █ ▇ ▅ ▃ ▂ ",
-                            "▆ █ ▇ ▅ ▃ ▂  ▂ ▄ ▆ █ ▇ ▅ ▃ ▂ ",
-                        ];
-                        frames[tick % frames.len()]
-                    }
-                    PlaybackStatus::Paused => "─ ─ [ PAUSED ] ─ ─",
-                    PlaybackStatus::Stopped => "─ ─ [ STOPPED ] ─ ─",
-                };
-
-                let eq_style = match state.status {
-                    PlaybackStatus::Playing => Style::default().fg(theme.playing).add_modifier(Modifier::BOLD),
-                    PlaybackStatus::Paused => Style::default().fg(theme.paused),
-                    PlaybackStatus::Stopped => Style::default().fg(theme.stopped),
-                };
-
-                Paragraph::new(eq_art)
-                    .alignment(Alignment::Center)
-                    .style(eq_style)
-                    .render(Rect::new(right_x, cur_y + art_h / 2, right_w, 1), buf);
-
-                cur_y += art_h + 1;
+            pending_graphic = cover_mgr.render_to_buffer(art_rect, buf);
+            cur_y += art_h;
+            if max_y.saturating_sub(cur_y) >= 10 {
+                cur_y += 1;
             }
-        } else if inner.height >= 10 {
-            // Small screen: fallback to compact 1-line equalizer
+        }
+
+        // 2. Centered Animated Equalizer
+        let remaining_for_eq = max_y.saturating_sub(cur_y);
+        if remaining_for_eq >= 8 {
             let eq_art = match state.status {
-                PlaybackStatus::Playing => " ▂ ▄ ▆ █ ▇ ▅ ▃ ▂ ▄ ▆ █ ▇ ▅ ▃ ",
+                PlaybackStatus::Playing => {
+                    let frames = [
+                        " ▂ ▄ ▆ █ ▇ ▅ ▃  ▂ ▄ ▆ █ ▇ ▅ ▃ ",
+                        "▃ ▅ ▇ █ ▆ ▄ ▂  ▃ ▅ ▇ █ ▆ ▄ ▂ ",
+                        "▄ ▆ █ ▇ ▅ ▃ ▂  ▄ ▆ █ ▇ ▅ ▃ ▂ ",
+                        "▆ █ ▇ ▅ ▃ ▂  ▂ ▄ ▆ █ ▇ ▅ ▃ ▂ ",
+                    ];
+                    frames[tick % frames.len()]
+                }
                 PlaybackStatus::Paused => "─ ─ [ PAUSED ] ─ ─",
                 PlaybackStatus::Stopped => "─ ─ [ STOPPED ] ─ ─",
             };
+
             let eq_style = match state.status {
                 PlaybackStatus::Playing => Style::default().fg(theme.playing).add_modifier(Modifier::BOLD),
                 PlaybackStatus::Paused => Style::default().fg(theme.paused),
                 PlaybackStatus::Stopped => Style::default().fg(theme.stopped),
             };
+
             Paragraph::new(eq_art)
                 .alignment(Alignment::Center)
                 .style(eq_style)
                 .render(Rect::new(inner.x, cur_y, inner.width, 1), buf);
-            cur_y += 2;
+
+            cur_y += 1;
+            if remaining_for_eq >= 11 {
+                cur_y += 1;
+            }
         }
 
-        // 2. Track Title & Artist
+        // 3. Track Title & Artist (Centered Marquee)
         let title_str = state
             .current_track
             .as_ref()
@@ -130,18 +139,21 @@ impl NowPlayingView {
         if cur_y < max_y {
             let title_rect = Rect::new(inner.x, cur_y, inner.width, 1);
             let title_style = Style::default().fg(theme.text).add_modifier(Modifier::BOLD);
-            Marquee::render(title_str, title_rect, tick, buf, title_style);
+            Marquee::render_centered(title_str, title_rect, tick, buf, title_style);
             cur_y += 1;
         }
 
         if cur_y < max_y {
             let artist_rect = Rect::new(inner.x, cur_y, inner.width, 1);
             let artist_style = Style::default().fg(theme.primary);
-            Marquee::render(artist_str, artist_rect, tick, buf, artist_style);
-            cur_y += 2;
+            Marquee::render_centered(artist_str, artist_rect, tick, buf, artist_style);
+            cur_y += 1;
+            if max_y.saturating_sub(cur_y) >= 7 {
+                cur_y += 1;
+            }
         }
 
-        // 3. Touch Seek Bar
+        // 4. Centered Touch Seek Bar
         if cur_y < max_y {
             let fraction = if state.duration_secs > 0.0 {
                 state.position_secs / state.duration_secs
@@ -152,17 +164,23 @@ impl NowPlayingView {
             let pos_str = format_time(state.position_secs);
             let dur_str = format_time(state.duration_secs);
 
-            let bar_rect = Rect::new(inner.x, cur_y, inner.width, 1);
+            let bar_w = inner.width.min(64).max(18);
+            let bar_x = inner.x + (inner.width.saturating_sub(bar_w)) / 2;
+            let bar_rect = Rect::new(bar_x, cur_y, bar_w, 1);
+
             TouchBar::progress(fraction, &pos_str, &dur_str)
                 .filled_style(theme.progress_filled_style())
                 .empty_style(theme.progress_empty_style())
                 .label_style(Style::default().fg(theme.muted))
                 .render_and_register(bar_rect, buf, hitmap);
 
-            cur_y += 2;
+            cur_y += 1;
+            if max_y.saturating_sub(cur_y) >= 5 {
+                cur_y += 1;
+            }
         }
 
-        // 4. Large Touch Playback Controls
+        // 5. Large Touch Playback Controls (Centered)
         if cur_y < max_y {
             let play_label = match state.status {
                 PlaybackStatus::Playing => " Pause",
@@ -176,27 +194,26 @@ impl NowPlayingView {
             let next_btn = TouchButton::new(" Next", UiAction::Engine(EngineCommand::Next))
                 .style(theme.button_style());
 
-            if profile.is_compact() {
-                let row_w = 32u16.min(inner.width);
-                let start_x = inner.x + (inner.width.saturating_sub(row_w)) / 2;
-
-                prev_btn.render_and_register(Rect::new(start_x, cur_y, 9, 1), buf, hitmap);
-                play_btn.render_and_register(Rect::new(start_x + 10, cur_y, 11, 1), buf, hitmap);
-                next_btn.render_and_register(Rect::new(start_x + 22, cur_y, 9, 1), buf, hitmap);
+            let (btn_w, spacing) = if profile.is_compact() {
+                (9u16, 1u16)
             } else {
-                let btn_w = 12u16;
-                let total_w = btn_w * 3 + 4;
-                let start_x = inner.x + (inner.width.saturating_sub(total_w)) / 2;
+                (12u16, 2u16)
+            };
 
-                prev_btn.render_and_register(Rect::new(start_x, cur_y, btn_w, 1), buf, hitmap);
-                play_btn.render_and_register(Rect::new(start_x + btn_w + 2, cur_y, btn_w, 1), buf, hitmap);
-                next_btn.render_and_register(Rect::new(start_x + (btn_w + 2) * 2, cur_y, btn_w, 1), buf, hitmap);
+            let total_w = btn_w * 3 + spacing * 2;
+            let start_x = inner.x + (inner.width.saturating_sub(total_w)) / 2;
+
+            prev_btn.render_and_register(Rect::new(start_x, cur_y, btn_w, 1), buf, hitmap);
+            play_btn.render_and_register(Rect::new(start_x + btn_w + spacing, cur_y, btn_w, 1), buf, hitmap);
+            next_btn.render_and_register(Rect::new(start_x + (btn_w + spacing) * 2, cur_y, btn_w, 1), buf, hitmap);
+
+            cur_y += 1;
+            if max_y.saturating_sub(cur_y) >= 3 {
+                cur_y += 1;
             }
-
-            cur_y += 2;
         }
 
-        // 5. Secondary Controls: Loop Mode, Shuffle, and Cover Protocol Switcher
+        // 6. Secondary Controls: Loop Mode, Shuffle, and Cover Protocol Switcher (Centered)
         if cur_y < max_y {
             let loop_label = match state.loop_mode {
                 LoopMode::Off => " Off",
@@ -224,25 +241,43 @@ impl NowPlayingView {
             let art_btn = TouchButton::new(&art_label, UiAction::CycleCoverProtocol)
                 .style(Style::default().fg(theme.primary));
 
-            let mut bx = inner.x;
-            loop_btn.render_and_register(Rect::new(bx, cur_y, 9, 1), buf, hitmap);
-            bx += 10;
+            let loop_w = 9u16;
+            let shuf_w = 9u16;
+            let art_w = (art_label.len() as u16) + 4;
 
-            if inner.width > 22 {
-                shuf_btn.render_and_register(Rect::new(bx, cur_y, 9, 1), buf, hitmap);
-                bx += 10;
+            let (show_shuf, show_art) = if inner.width >= 34 {
+                (true, true)
+            } else if inner.width >= 22 {
+                (true, false)
+            } else {
+                (false, false)
+            };
+
+            let total_sec_w = loop_w
+                + if show_shuf { shuf_w + 1 } else { 0 }
+                + if show_art { art_w + 1 } else { 0 };
+
+            let mut bx = inner.x + (inner.width.saturating_sub(total_sec_w)) / 2;
+            loop_btn.render_and_register(Rect::new(bx, cur_y, loop_w, 1), buf, hitmap);
+            bx += loop_w + 1;
+
+            if show_shuf {
+                shuf_btn.render_and_register(Rect::new(bx, cur_y, shuf_w, 1), buf, hitmap);
+                bx += shuf_w + 1;
             }
 
-            if inner.width > 34 {
-                let art_w = (art_label.len() as u16) + 4;
+            if show_art {
                 art_btn.render_and_register(Rect::new(bx, cur_y, art_w, 1), buf, hitmap);
             }
 
-            cur_y += 2;
+            cur_y += 1;
+            if max_y.saturating_sub(cur_y) >= 2 {
+                cur_y += 1;
+            }
         }
 
-        // 6. Interactive Volume Bar with [-] [+] touch buttons
-        if cur_y < max_y {
+        // 7. Interactive Volume Bar with [-] [+] touch buttons (Centered)
+        if cur_y < max_y && inner.width > 20 {
             let vol_str = format!("Vol: {:3}%", state.volume);
             let vol_frac = (state.volume as f64) / 100.0;
 
@@ -251,21 +286,20 @@ impl NowPlayingView {
             let plus_btn = TouchButton::new("+", UiAction::Engine(EngineCommand::AdjustVolume(5)))
                 .style(Style::default().fg(theme.muted));
 
-            let minus_w = 5u16;
-            let plus_w = 5u16;
+            let total_vol_w = inner.width.min(50).max(20);
+            let start_vol_x = inner.x + (inner.width.saturating_sub(total_vol_w)) / 2;
+            let minus_w = 4u16;
+            let plus_w = 4u16;
+            let bar_w = total_vol_w.saturating_sub(minus_w + plus_w + 2);
+            let bar_x = start_vol_x + minus_w + 1;
 
-            if inner.width > 25 {
-                let bar_x = inner.x + minus_w + 1;
-                let bar_w = inner.width.saturating_sub(minus_w + plus_w + 2);
-
-                minus_btn.render_and_register(Rect::new(inner.x, cur_y, minus_w, 1), buf, hitmap);
-                TouchBar::volume(vol_frac, &vol_str, "")
-                    .filled_style(Style::default().fg(theme.secondary))
-                    .empty_style(theme.progress_empty_style())
-                    .label_style(Style::default().fg(theme.muted))
-                    .render_and_register(Rect::new(bar_x, cur_y, bar_w, 1), buf, hitmap);
-                plus_btn.render_and_register(Rect::new(inner.x + inner.width - plus_w, cur_y, plus_w, 1), buf, hitmap);
-            }
+            minus_btn.render_and_register(Rect::new(start_vol_x, cur_y, minus_w, 1), buf, hitmap);
+            TouchBar::volume(vol_frac, &vol_str, "")
+                .filled_style(Style::default().fg(theme.secondary))
+                .empty_style(theme.progress_empty_style())
+                .label_style(Style::default().fg(theme.muted))
+                .render_and_register(Rect::new(bar_x, cur_y, bar_w, 1), buf, hitmap);
+            plus_btn.render_and_register(Rect::new(start_vol_x + total_vol_w - plus_w, cur_y, plus_w, 1), buf, hitmap);
         }
 
         pending_graphic

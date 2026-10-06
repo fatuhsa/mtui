@@ -60,6 +60,8 @@ impl AppTab {
 /// The UI Controller coordinating presentation and dispatching events to the AudioEngine
 pub struct AppUi {
     pub current_tab: AppTab,
+    pub previous_tab: AppTab,
+    pub needs_terminal_clear: bool,
     pub theme: Theme,
     pub hitmap: TouchHitMap,
     pub tick: usize,
@@ -88,6 +90,8 @@ impl AppUi {
 
         Self {
             current_tab: AppTab::NowPlaying,
+            previous_tab: AppTab::NowPlaying,
+            needs_terminal_clear: false,
             theme: Theme::neon(),
             hitmap: TouchHitMap::new(),
             tick: 0,
@@ -168,11 +172,20 @@ impl AppUi {
     ) -> bool {
         match action {
             UiAction::SwitchTab(idx) => {
-                self.current_tab = AppTab::from_index(idx);
+                let target = AppTab::from_index(idx);
+                if self.current_tab != target {
+                    self.previous_tab = self.current_tab;
+                    self.current_tab = target;
+                    self.needs_terminal_clear = true;
+                    if target == AppTab::NowPlaying {
+                        self.cover_mgr.mark_dirty();
+                    }
+                }
                 false
             }
             UiAction::CycleCoverProtocol => {
-                self.cover_mgr.cycle_protocol(20, 8);
+                self.cover_mgr.cycle_protocol();
+                self.needs_terminal_clear = true;
                 false
             }
             UiAction::Engine(cmd) => {
@@ -197,7 +210,12 @@ impl AppUi {
             UiAction::BrowsePlayTrack(path) => {
                 let track = Track::from_path(path);
                 let _ = engine_tx.send(EngineCommand::PlayTrackNow(track));
-                self.current_tab = AppTab::NowPlaying;
+                if self.current_tab != AppTab::NowPlaying {
+                    self.previous_tab = self.current_tab;
+                    self.current_tab = AppTab::NowPlaying;
+                    self.needs_terminal_clear = true;
+                }
+                self.cover_mgr.mark_dirty();
                 false
             }
             UiAction::BrowseQueueTrack(path) => {
@@ -250,11 +268,6 @@ impl AppUi {
             return;
         }
 
-        // Update cover art background loader
-        self.cover_mgr.update();
-        let current_path = state.current_track.as_ref().map(|t| t.path.as_path());
-        self.cover_mgr.set_track(current_path, 20, 7);
-
         let profile = ScreenProfile::from_rect(area);
 
         // Vertical layout: [Top Tab Bar] -> [Active View] -> [Bottom Mini Bar]
@@ -271,6 +284,16 @@ impl AppUi {
         let main_area = chunks[1];
         let status_area = chunks[2];
 
+        // Compute flexible cover art dimensions from main_area inner box
+        let inner_w = main_area.width.saturating_sub(2);
+        let inner_h = main_area.height.saturating_sub(2);
+        let (art_w, art_h) = NowPlayingView::calculate_art_size(inner_w, inner_h);
+
+        // Update cover art background loader with dynamic dimensions
+        self.cover_mgr.update();
+        let current_path = state.current_track.as_ref().map(|t| t.path.as_path());
+        self.cover_mgr.set_track(current_path, art_w, art_h);
+
         // 1. Draw Top Tab Bar with Touch Targets (including Minimize and Quit)
         self.draw_tab_bar(tab_area, frame.buffer_mut(), profile);
 
@@ -281,7 +304,7 @@ impl AppUi {
                     main_area,
                     frame.buffer_mut(),
                     state,
-                    &self.cover_mgr,
+                    &mut self.cover_mgr,
                     &self.theme,
                     profile,
                     self.tick,

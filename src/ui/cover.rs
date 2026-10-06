@@ -47,33 +47,35 @@ pub enum RenderedCover {
     VinylArt,
 }
 
-/// Asynchronous cover art manager preventing any UI blocking during extraction and rendering
+/// Asynchronous cover art manager with size awareness and dirty state tracking
 pub struct CoverArtManager {
     pub protocol: CoverProtocol,
     current_audio_path: Option<PathBuf>,
+    current_size: (u16, u16),
     current_rendered: RenderedCover,
+    pub is_dirty: bool,
     req_tx: Sender<(PathBuf, CoverProtocol, u16, u16)>,
-    resp_rx: Receiver<(PathBuf, CoverProtocol, RenderedCover)>,
+    resp_rx: Receiver<(PathBuf, CoverProtocol, u16, u16, RenderedCover)>,
 }
 
 impl CoverArtManager {
     pub fn new() -> Self {
         let (req_tx, req_rx) = mpsc::channel::<(PathBuf, CoverProtocol, u16, u16)>();
-        let (resp_tx, resp_rx) = mpsc::channel::<(PathBuf, CoverProtocol, RenderedCover)>();
+        let (resp_tx, resp_rx) = mpsc::channel::<(PathBuf, CoverProtocol, u16, u16, RenderedCover)>();
 
         // Background worker thread for extracting and converting images
         thread::spawn(move || {
             while let Ok((audio_path, proto, width, height)) = req_rx.recv() {
                 if proto == CoverProtocol::Off {
-                    let _ = resp_tx.send((audio_path, proto, RenderedCover::VinylArt));
+                    let _ = resp_tx.send((audio_path, proto, width, height, RenderedCover::VinylArt));
                     continue;
                 }
 
                 if let Some(cover_path) = get_or_extract_cover_art(&audio_path) {
                     let rendered = render_image_with_chafa(&cover_path, proto, width, height);
-                    let _ = resp_tx.send((audio_path, proto, rendered));
+                    let _ = resp_tx.send((audio_path, proto, width, height, rendered));
                 } else {
-                    let _ = resp_tx.send((audio_path, proto, RenderedCover::VinylArt));
+                    let _ = resp_tx.send((audio_path, proto, width, height, RenderedCover::VinylArt));
                 }
             }
         });
@@ -81,7 +83,9 @@ impl CoverArtManager {
         Self {
             protocol: CoverProtocol::Sixel,
             current_audio_path: None,
+            current_size: (0, 0),
             current_rendered: RenderedCover::VinylArt,
+            is_dirty: true,
             req_tx,
             resp_rx,
         }
@@ -89,67 +93,115 @@ impl CoverArtManager {
 
     /// Checks if a new cover art was processed in the background
     pub fn update(&mut self) {
-        while let Ok((path, proto, rendered)) = self.resp_rx.try_recv() {
-            if self.current_audio_path.as_ref() == Some(&path) && self.protocol == proto {
+        while let Ok((path, proto, w, h, rendered)) = self.resp_rx.try_recv() {
+            if self.current_audio_path.as_ref() == Some(&path)
+                && self.protocol == proto
+                && self.current_size == (w, h)
+            {
                 self.current_rendered = rendered;
+                self.is_dirty = true;
             }
         }
     }
 
-    /// Requests rendering for the specified track path
+    /// Mark graphics as needing redraw (e.g. after screen clear or returning to NowPlaying)
+    pub fn mark_dirty(&mut self) {
+        self.is_dirty = true;
+    }
+
+    /// Requests rendering for the specified track path with flexible dimensions
     pub fn set_track(&mut self, audio_path: Option<&Path>, width: u16, height: u16) {
         let path_buf = audio_path.map(|p| p.to_path_buf());
-        if self.current_audio_path != path_buf {
+        let size_changed = self.current_size != (width, height);
+        let track_changed = self.current_audio_path != path_buf;
+
+        if track_changed || size_changed {
             self.current_audio_path = path_buf.clone();
-            self.current_rendered = RenderedCover::VinylArt;
+            self.current_size = (width, height);
+            self.is_dirty = true;
 
             if let Some(path) = path_buf {
-                let _ = self.req_tx.send((path, self.protocol, width, height));
+                if width >= 4 && height >= 2 {
+                    let _ = self.req_tx.send((path, self.protocol, width, height));
+                }
+            } else {
+                self.current_rendered = RenderedCover::VinylArt;
             }
         }
     }
 
     /// Cycle to next graphics protocol
-    pub fn cycle_protocol(&mut self, width: u16, height: u16) {
+    pub fn cycle_protocol(&mut self) {
         self.protocol = self.protocol.next();
+        self.is_dirty = true;
         if let Some(path) = &self.current_audio_path {
-            let _ = self.req_tx.send((path.clone(), self.protocol, width, height));
+            let (w, h) = self.current_size;
+            if w > 0 && h > 0 {
+                let _ = self.req_tx.send((path.clone(), self.protocol, w, h));
+            }
         }
     }
 
     /// Renders cover art into area.
-    /// Returns Some((x, y, escape_str)) if Sixel/iTerm2 needs to be written directly to stdout.
+    /// Returns Some((x, y, escape_str)) ONLY when graphics need to be output to stdout.
+    /// Once output, is_dirty is cleared so we do not flood the terminal with escape codes.
     pub fn render_to_buffer(
-        &self,
+        &mut self,
         area: Rect,
         buf: &mut Buffer,
     ) -> Option<(u16, u16, String)> {
-        if area.width < 8 || area.height < 4 {
+        if area.width < 4 || area.height < 2 {
             return None;
         }
 
         match &self.current_rendered {
             RenderedCover::EscapeSequence(seq) => {
-                // Clear the box in buffer so no characters interfere with the image
+                // Clear the box in buffer so character cells don't conflict with graphics
                 for y in area.y..area.y + area.height {
                     for x in area.x..area.x + area.width {
                         if let Some(cell) = buf.cell_mut((x, y)) {
                             cell.set_symbol(" ");
+                            cell.set_style(Style::default());
                         }
                     }
                 }
-                // Return coordinates for terminal stdout write
-                Some((area.x, area.y, seq.clone()))
+
+                // Only return graphic escape sequence when dirty
+                if self.is_dirty {
+                    self.is_dirty = false;
+                    Some((area.x, area.y, seq.clone()))
+                } else {
+                    None
+                }
             }
             RenderedCover::TextLines(lines) => {
-                for (i, line) in lines.iter().enumerate() {
-                    let y = area.y + (i as u16);
-                    if y >= area.y + area.height {
-                        break;
+                // Clear the box in buffer
+                for y in area.y..area.y + area.height {
+                    for x in area.x..area.x + area.width {
+                        if let Some(cell) = buf.cell_mut((x, y)) {
+                            cell.set_symbol(" ");
+                            cell.set_style(Style::default());
+                        }
                     }
-                    buf.set_string(area.x, y, line, Style::default());
                 }
-                None
+
+                if self.is_dirty {
+                    self.is_dirty = false;
+                    let mut combined = String::new();
+                    for (i, line) in lines.iter().enumerate() {
+                        let y = area.y + (i as u16);
+                        if y >= area.y + area.height {
+                            break;
+                        }
+                        if i > 0 {
+                            combined.push_str(&format!("\x1b[{};{}H", y + 1, area.x + 1));
+                        }
+                        combined.push_str(line);
+                    }
+                    Some((area.x, area.y, combined))
+                } else {
+                    None
+                }
             }
             RenderedCover::VinylArt => {
                 render_vinyl_art(area, buf);
@@ -217,7 +269,8 @@ fn render_vinyl_art(area: Rect, buf: &mut Buffer) {
         if y >= area.y + area.height {
             break;
         }
-        let start_x = area.x + (area.width.saturating_sub(line.chars().count() as u16)) / 2;
+        let line_len = line.chars().count() as u16;
+        let start_x = area.x + (area.width.saturating_sub(line_len)) / 2;
         buf.set_string(
             start_x,
             y,
