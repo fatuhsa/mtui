@@ -8,13 +8,13 @@ A lightweight, high-performance, battery-friendly TUI Music Player built with Ru
 
 <div align="center">
 
-|  Now Playing |  File Browser |
+|  Now Playing (Sixel & Beat Visualizer) |  Touch File Browser |
 |:---:|:---:|
-| <img src="assets/screenshots/showcase-1.jpg" width="360" alt="mtui Now Playing view" /> | <img src="assets/screenshots/showcase-2.jpg" width="360" alt="mtui File Browser view" /> |
+| <img src="assets/screenshots/showcase-1.jpg" width="380" alt="mtui Now Playing view" /> | <img src="assets/screenshots/showcase-2.jpg" width="380" alt="mtui File Browser view" /> |
 
-|  Queue List |  Cover Art |  Help & Controls |
-|:---:|:---:|:---:|
-| <img src="assets/screenshots/showcase-3.jpg" width="240" alt="mtui Queue List" /> | <img src="assets/screenshots/showcase-4.jpg" width="240" alt="mtui Cover Art" /> | <img src="assets/screenshots/showcase-5.jpg" width="240" alt="mtui Controls Guide" /> |
+|  Queue Management |  Touch & Keyboard Guide |
+|:---:|:---:|
+| <img src="assets/screenshots/showcase-3.jpg" width="380" alt="mtui Queue List" /> | <img src="assets/screenshots/showcase-4.jpg" width="380" alt="mtui Controls Guide" /> |
 
 </div>
 
@@ -97,6 +97,16 @@ mtui
   - Tapping `[  ]` suspends the TUI safely to the Termux bash shell via `SIGTSTP`.
   - **Audio continues playing seamlessly in the background** while you use other shell commands.
   - Type `fg` in Termux at any time to instantly restore the full TUI!
+- **🎵 30 FPS Beat-Synchronized Visualizer**:
+  - Stateful real-time visualizer (`src/ui/visualizer.rs`) ticking at smooth 30 FPS.
+  - Beat-synced frequency envelopes modeling **Kick, Sub-bass, Snare, and Hi-hat** timing to match music rhythm.
+  - Physics-based **gravity decay & peak hold falloff** (Cava-style) for smooth, non-stuttering animations.
+  - Sub-block Unicode bars (` `, `▂`, `▃`, `▄`, `▅`, `▆`, `▇`, `█`) with dynamic color gradients.
+  - Auto-sleep when playback is stopped/paused to preserve mobile battery.
+- **📱 Adaptive Mobile Screen Layout & Artifact-Free Views**:
+  - Compact mobile top tabs (`Play`, `Files`, `Queue`, `Help`) prevent line-wrapping or button clipping on narrow phone screens, automatically expanding on wider terminals.
+  - Perfectly centered album cover art with flexible padding that dynamically adjusts to portrait and landscape orientation.
+  - Artifact-free screen navigation: terminal buffer is strictly sanitized when switching tabs, preventing ghost Sixel pixels or leftover graphics.
 - **⚡ Termux & Battery Optimized**:
   - Native Rust binary (~1.6 MB), minimal RAM (< 15 MB) and near-zero idle CPU usage.
   - Automatic screen adaptation: supports narrow phone portrait screens (< 50 cols) with title marquee scrolling, as well as landscape/tablet split views.
@@ -162,6 +172,7 @@ mtui/
 │   ├── ui/                     # DETACHED UI PRESENTATION LAYER
 │   │   ├── mod.rs              # AppUi coordinator
 │   │   ├── cover.rs            # Async Sixel / iTerm2 / HalfBlock cover art renderer
+│   │   ├── visualizer.rs       # 30 FPS beat-synchronized physics audio visualizer
 │   │   ├── hitmap.rs           # TouchHitMap for declarative touch tap & slider resolution
 │   │   ├── theme.rs            # Mobile high-contrast color palettes
 │   │   ├── responsive.rs       # Compact (portrait) vs Wide (landscape) detector
@@ -171,7 +182,8 @@ mtui/
 │       ├── cover.rs            # Embedded cover art extraction via ffmpeg
 │       └── storage.rs          # Android storage auto-discovery (/sdcard/Music, ~/storage/music)
 └── tests/
-    └── engine_tests.rs         # Automated tests for engine logic and touch resolution
+    ├── engine_tests.rs         # Automated tests for engine logic, playlist, and shuffle
+    └── ui_tests.rs             # Automated tests for touch hit-mapping and visualizer physics
 ```
 
 ---
@@ -182,4 +194,4 @@ mtui/
 cargo test
 ```
 
-All 5 core engine, playlist, shuffle, and touch hit-mapping tests pass out-of-the-box.
+All 10 core engine, playlist, shuffle, visualizer physics, and touch hit-mapping tests pass out-of-the-box.
